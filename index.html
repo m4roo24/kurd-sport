@@ -1776,25 +1776,6 @@
                 </button>
             </div>
             <div class="settings-section">
-                <h3><i class="fas fa-plus-circle"></i> Add Your Channel</h3>
-                <p class="settings-desc">Paste any M3U8 stream URL to add it to your channels.</p>
-                <div class="input-group">
-                    <input type="text" id="customChannelName" placeholder="Channel Name (e.g. My Channel)" class="settings-input">
-                    <input type="text" id="customM3U8" placeholder="M3U8 URL (e.g. https://example.com/stream.m3u8)" class="settings-input">
-                    <select id="customCategory" class="settings-input">
-                        <option value="Custom">Custom</option>
-                        <option value="beIN Sport">beIN Sport</option>
-                        <option value="FIFA">Kurdish Sports</option>
-                        <option value="WORLD CUP">Global Sports</option>
-                    </select>
-                    <label class="checkbox-label">
-                        <input type="checkbox" id="customNeedsProxy"> Needs Proxy (CORS/Mixed Content)
-                    </label>
-                    <button class="settings-btn-primary" onclick="addCustomChannel()" tabindex="0"><i class="fas fa-plus"></i> Add Channel</button>
-                </div>
-                <div id="customChannelsList" class="custom-channels-list"></div>
-            </div>
-            <div class="settings-section">
                 <h3><i class="fas fa-palette"></i> Theme Color</h3>
                 <div class="color-picker">
                     <button class="color-option active" data-color="#7c3aed" style="background:#7c3aed;" onclick="setThemeColor('#7c3aed')" tabindex="0"></button>
@@ -1847,32 +1828,6 @@
                     <button class="mode-btn" data-quality="low" onclick="setDefaultQuality('low')" tabindex="0">Low (360p)</button>
                     <button class="mode-btn" data-quality="medium" onclick="setDefaultQuality('medium')" tabindex="0">Medium (720p)</button>
                     <button class="mode-btn" data-quality="high" onclick="setDefaultQuality('high')" tabindex="0">High (1080p)</button>
-                </div>
-            </div>
-            <div class="settings-section">
-                <h3><i class="fas fa-clock"></i> Controls Timer</h3>
-                <p class="settings-desc">How long before player controls auto-hide when idle.</p>
-                <div class="mode-toggle" id="controlsTimerToggle">
-                    <button class="mode-btn" data-timer="2" onclick="setControlsTimer(2)" tabindex="0">2s</button>
-                    <button class="mode-btn" data-timer="4" onclick="setControlsTimer(4)" tabindex="0">4s</button>
-                    <button class="mode-btn" data-timer="8" onclick="setControlsTimer(8)" tabindex="0">8s</button>
-                    <button class="mode-btn" data-timer="0" onclick="setControlsTimer(0)" tabindex="0">Never</button>
-                </div>
-            </div>
-            <div class="settings-section">
-                <h3><i class="fas fa-database"></i> Data & Storage</h3>
-                <p class="settings-desc">Manage your custom channels and app data.</p>
-                <div class="input-group" style="gap:10px;">
-                    <button class="settings-btn-primary" onclick="exportCustomChannels()" tabindex="0">
-                        <i class="fas fa-file-export"></i> Export My Channels
-                    </button>
-                    <button class="settings-btn-primary" onclick="importCustomChannels()" tabindex="0" style="background:var(--bg-input); color:var(--text-primary); border:1px solid var(--border);">
-                        <i class="fas fa-file-import"></i> Import Channels
-                    </button>
-                    <input type="file" id="importFileInput" accept=".json" style="display:none;" onchange="handleImportFile(this)">
-                    <button class="settings-btn-primary" onclick="resetAllSettings()" tabindex="0" style="background:rgba(239,68,68,0.15); color:var(--live-red); border:1px solid rgba(239,68,68,0.3);">
-                        <i class="fas fa-trash-alt"></i> Reset All Settings
-                    </button>
                 </div>
             </div>
             <div class="settings-section">
