@@ -3376,61 +3376,7 @@
     initChannels();
     </script>
 
-    <!-- Ad Popunder Only -->
-    <script>
-    (function() {
-        const SMART_LINK = '';
-        let lastAdTime = 0;
-     const AD_COOLDOWN = 3600000;
-
-        function isPremium() {
-            try {
-                const saved = localStorage.getItem('yara_premium');
-                if (saved) { const data = JSON.parse(saved); return data.active === true; }
-            } catch(e) {}
-            return false;
-        }
-        function canShowAd() {
-            if (isPremium()) return false;
-            return (Date.now() - lastAdTime) >= AD_COOLDOWN;
-        }
-        function openAd() {
-            if (!canShowAd()) return false;
-            lastAdTime = Date.now();
-            try {
-                const win = window.open(SMART_LINK, '_blank', 'noopener,noreferrer');
-                if (win) return true;
-            } catch(e) {}
-            try {
-                const iframe = document.createElement('iframe');
-                iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none;opacity:0;pointer-events:none;z-index:-1;';
-                iframe.src = SMART_LINK;
-                document.body.appendChild(iframe);
-                setTimeout(() => { if (iframe.parentNode) iframe.remove(); }, 5000);
-                return true;
-            } catch(e) {}
-            return false;
-        }
-        function isInsideTelegramPopup(el) {
-            while (el && el !== document.body) {
-                if (el.classList && el.classList.contains('telegram-popup')) return true;
-                if (el.id === 'telegramPopup') return true;
-                el = el.parentElement;
-            }
-            return false;
-        }
-        function isTelegramPopupOpen() {
-            const popup = document.getElementById('telegramPopup');
-            return popup && popup.classList.contains('show');
-        }
-        document.addEventListener('click', function(e) {
-            // Skip if Telegram popup is open OR if click is inside Telegram popup
-            if (isTelegramPopupOpen()) return;
-            if (isInsideTelegramPopup(e.target)) return;
-            if (canShowAd()) setTimeout(function() { openAd(); }, 200);
-        }, true);
-    })();
-    </script>
+    
 
     <!-- Premium Styles -->
     <style>
