@@ -3892,106 +3892,13 @@
     </script>
 
     <!-- Telegram Popup Logic (24h cooldown) -->
-    <script>
-    (function() {
-        'use strict';
-        const TG_STORAGE_KEY = 'kurd_sport_tg_popup';
-        const COOLDOWN_MS = 16 * 60 * 60 * 1000; // 24 hours // 24 hours
-        const DELAY_MS = 1000; // Show after 3 seconds
-
-        function shouldShowPopup() {
-            try {
-                var lastShown = localStorage.getItem(TG_STORAGE_KEY);
-                if (!lastShown) return true;
-                var lastTime = parseInt(lastShown, 10);
-                if (isNaN(lastTime)) return true;
-                return (Date.now() - lastTime) >= COOLDOWN_MS;
-            } catch(e) {
-                return true;
-            }
-        }
-
-        function markPopupShown() {
-            try {
-                localStorage.setItem(TG_STORAGE_KEY, Date.now().toString());
-            } catch(e) {}
-        }
-
-        window.closeTelegramPopup = function(joined) {
-            var popup = document.getElementById('telegramPopup');
-            if (popup) {
-                popup.classList.remove('show');
-                setTimeout(function() {
-                    popup.style.display = 'none';
-                }, 400);
-            }
-            markPopupShown();
-            if (joined) {
-                showToast('Thanks! Joined Kurd Sport TV on Telegram', 'fab fa-telegram-plane');
-            }
-        };
-
-        function initTelegramPopup() {
-            if (!shouldShowPopup()) return;
-            var popup = document.getElementById('telegramPopup');
-            if (!popup) return;
-            setTimeout(function() {
-                popup.style.display = 'flex';
-                // Force reflow
-                void popup.offsetWidth;
-                popup.classList.add('show');
-            }, DELAY_MS);
-        }
-
-        // Also show on page load / channel change (if 24h passed)
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initTelegramPopup);
-        } else {
-            initTelegramPopup();
-        }
-    })();
-    </script>
+    
 
 <!-- Simple Analytics -->
 <script async src="https://scripts.simpleanalyticscdn.com/latest.js"></script>
 <noscript><img src="https://queue.simpleanalyticscdn.com/noscript.gif" alt="" referrerpolicy="no-referrer-when-downgrade" /></noscript>
 
-<script>
-(function() {
-    'use strict';
-    var POPUP_EL = document.getElementById('telegramPopup');
-    var STORAGE_LATER = 'kurdSport_tgLater';
-    var STORAGE_JOINED = 'kurdSport_tgJoined';
-    var HOURS_18 = 18 * 60 * 60 * 1000;
 
-    function shouldShow() {
-        if (localStorage.getItem(STORAGE_JOINED) === 'true') return false;
-        var dismissedAt = localStorage.getItem(STORAGE_LATER);
-        if (!dismissedAt) return true;
-        return (Date.now() - parseInt(dismissedAt, 10)) >= HOURS_18;
-    }
-    function showPopup() {
-        if (!POPUP_EL) return;
-        setTimeout(function() {
-            if (shouldShow()) POPUP_EL.classList.add('show');
-        }, 2500);
-    }
-    window.closeTelegramPopup = function(joined) {
-        if (POPUP_EL) POPUP_EL.classList.remove('show');
-        if (joined) {
-            localStorage.setItem(STORAGE_JOINED, 'true');
-            localStorage.removeItem(STORAGE_LATER);
-        } else {
-            localStorage.setItem(STORAGE_LATER, Date.now().toString());
-        }
-    };
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', showPopup);
-    } else {
-        showPopup();
-    }
-})();
-</script>
 
 <script>
 (function() {
@@ -4267,33 +4174,89 @@
 })();
 </script>
 
+
+
 <script>
 (function() {
-    const TG_POPUP_KEY = 'kurdSportTelegramPopupDismissed';
+    'use strict';
 
-    // Auto-show popup after 1.5 seconds if not dismissed before
-    document.addEventListener('DOMContentLoaded', function() {
-        var popup = document.getElementById('telegramPopup');
-        if (!popup) return;
+    var STORAGE_KEY = 'kurdSport_tg_popup_v3';
+    var HIDE_DURATION_MS = 18 * 60 * 60 * 1000;
+    var SHOW_DELAY_MS = 1500;
 
-        // If user already clicked Later or Join, don't show again
-        if (localStorage.getItem(TG_POPUP_KEY)) return;
+    function getDismissedTime() {
+        try {
+            var val = localStorage.getItem(STORAGE_KEY);
+            if (val) {
+                var parsed = parseInt(val, 10);
+                if (!isNaN(parsed)) return parsed;
+            }
+        } catch (e) {}
+        return null;
+    }
 
-        setTimeout(function() {
-            popup.classList.add('show');
-        }, 1500);
-    });
+    function setDismissed() {
+        try {
+            localStorage.setItem(STORAGE_KEY, Date.now().toString());
+        } catch (e) {}
+    }
 
-    // Called by both buttons
-    window.closeTelegramPopup = function(joined) {
+    function shouldShow() {
+        var dismissedAt = getDismissedTime();
+        if (!dismissedAt) return true;
+        return (Date.now() - dismissedAt) >= HIDE_DURATION_MS;
+    }
+
+    function hidePopup() {
         var popup = document.getElementById('telegramPopup');
         if (popup) {
             popup.classList.remove('show');
+            popup.style.display = 'none';
         }
-        // Remember choice so popup doesn't annoy user every reload
-        localStorage.setItem(TG_POPUP_KEY, joined ? 'joined' : 'later');
+    }
+
+    function showPopup() {
+        var popup = document.getElementById('telegramPopup');
+        if (popup) {
+            popup.style.display = 'flex';
+            void popup.offsetWidth;
+            popup.classList.add('show');
+        }
+    }
+
+    // Global handler for onclick attributes
+    window.closeTelegramPopup = function(joined) {
+        hidePopup();
+        setDismissed();
+        if (joined) {
+            console.log('Joined Kurd Sport TV Telegram');
+        }
+        return true;
     };
+
+    // Hide immediately to prevent flash on every load
+    hidePopup();
+
+    function init() {
+        if (shouldShow()) {
+            setTimeout(showPopup, SHOW_DELAY_MS);
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+
+    // Close on backdrop click
+    document.addEventListener('click', function(e) {
+        if (e.target && e.target.id === 'telegramPopup') {
+            closeTelegramPopup(false);
+        }
+    });
 })();
 </script>
+
 </body>
 </html>
