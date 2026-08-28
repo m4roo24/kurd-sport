@@ -4257,5 +4257,79 @@
     };
 })();
 </script>
+
+<script>
+(function() {
+    'use strict';
+
+    const STORAGE_KEY = 'kurdSportTelegramPopupDismissed';
+    const HIDE_DURATION_MS = 18 * 60 * 60 * 1000; // 18 hours
+
+    function getDismissedTime() {
+        try {
+            return parseInt(localStorage.getItem(STORAGE_KEY), 10);
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function shouldShowPopup() {
+        const dismissedAt = getDismissedTime();
+        if (!dismissedAt || isNaN(dismissedAt)) return true;
+        return (Date.now() - dismissedAt) >= HIDE_DURATION_MS;
+    }
+
+    function showPopup() {
+        const popup = document.getElementById('telegramPopup');
+        if (popup) {
+            popup.classList.add('show');
+            popup.style.display = 'flex';
+        }
+    }
+
+    function hidePopup() {
+        const popup = document.getElementById('telegramPopup');
+        if (popup) {
+            popup.classList.remove('show');
+            popup.style.display = 'none';
+        }
+    }
+
+    // Expose globally for the onclick handlers
+    window.closeTelegramPopup = function(joined) {
+        hidePopup();
+        try {
+            localStorage.setItem(STORAGE_KEY, Date.now().toString());
+        } catch (e) {
+            // localStorage might be blocked in some contexts
+        }
+        if (joined) {
+            // User clicked Join — the link will open in new tab as normal
+            console.log('User joined Telegram channel');
+        }
+    };
+
+    // Auto-show popup on load (with a small delay for better UX)
+    document.addEventListener('DOMContentLoaded', function() {
+        if (shouldShowPopup()) {
+            setTimeout(showPopup, 1200);
+        }
+    });
+
+    // Also allow closing by clicking the dark backdrop (outside the popup card)
+    document.addEventListener('DOMContentLoaded', function() {
+        const popup = document.getElementById('telegramPopup');
+        if (popup) {
+            popup.addEventListener('click', function(e) {
+                // If the click is directly on the overlay (not the inner popup card)
+                if (e.target === popup) {
+                    closeTelegramPopup(false);
+                }
+            });
+        }
+    });
+})();
+</script>
+
 </body>
 </html>
