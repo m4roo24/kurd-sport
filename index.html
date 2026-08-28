@@ -4229,5 +4229,33 @@
 })();
 </script>
 
+<script>
+(function() {
+    const TG_POPUP_KEY = 'kurdSportTelegramPopupDismissed';
+
+    // Auto-show popup after 1.5 seconds if not dismissed before
+    document.addEventListener('DOMContentLoaded', function() {
+        var popup = document.getElementById('telegramPopup');
+        if (!popup) return;
+
+        // If user already clicked Later or Join, don't show again
+        if (localStorage.getItem(TG_POPUP_KEY)) return;
+
+        setTimeout(function() {
+            popup.classList.add('show');
+        }, 1500);
+    });
+
+    // Called by both buttons
+    window.closeTelegramPopup = function(joined) {
+        var popup = document.getElementById('telegramPopup');
+        if (popup) {
+            popup.classList.remove('show');
+        }
+        // Remember choice so popup doesn't annoy user every reload
+        localStorage.setItem(TG_POPUP_KEY, joined ? 'joined' : 'later');
+    };
+})();
+</script>
 </body>
 </html>
