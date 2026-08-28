@@ -2569,10 +2569,157 @@
         }
     }
 
+// ===================== NATIVE HLS FALLBACK (iOS/Safari/Android) =====================
+    function initNativeHls(url, ch, loadToken) {
+        if (loadToken !== streamLoadToken) return;
+
+        console.log('[Native HLS] Using native video.src for', ch.name);
+
+        // Clean up any existing hls instance
+        cleanupStream();
+
+        video.src = url;
+        video.load();
+
+        let playStarted = false;
+
+        function onLoadedMetadata() {
+            if (loadToken !== streamLoadToken) return;
+            loadingOverlay.style.display = 'none';
+            loadingText.textContent = 'Loading stream...';
+            streamStatus.className = 'stream-status checking';
+            streamStatus.innerHTML = '<i class="fas fa-pause-circle"></i> Paused - Click Resume';
+            isLoading = false;
+
+            // Always start muted for autoplay compliance, then unmute
+            video.muted = true;
+
+            if (autoPlayEnabled) {
+                var playPromise = video.play();
+                if (playPromise !== undefined) {
+                    playPromise.then(function() {
+                        playStarted = true;
+                        setTimeout(function() {
+                            if (video.muted) video.muted = false;
+                        }, 800);
+                    }).catch(function(err) {
+                        console.log('Autoplay blocked, keeping muted:', err);
+                        video.muted = true;
+                        video.play().catch(function(){});
+                    });
+                }
+            } else {
+                video.pause();
+            }
+        }
+
+        function onPlaying() {
+            if (loadToken !== streamLoadToken) return;
+            loadState = 'playing';
+            loadingOverlay.style.display = 'none';
+            errorOverlay.classList.remove('show');
+            errorOverlay.style.display = 'none';
+            retryBtn.style.display = 'none';
+            streamStatus.className = 'stream-status online';
+            streamStatus.innerHTML = '<i class="fas fa-circle"></i> Live';
+            updatePlayButton();
+            isLoading = false;
+            const statusEl = document.getElementById('ch-status-' + currentChannelIndex);
+            if (statusEl) statusEl.className = 'ch-status online';
+            if (video.muted) {
+                setTimeout(function() {
+                    if (video.muted) video.muted = false;
+                }, 500);
+            }
+            if (isCasting) castCurrentChannel();
+        }
+
+        function onWaiting() {
+            if (loadToken !== streamLoadToken) return;
+            loadingText.textContent = 'Buffering...';
+            loadingOverlay.style.display = 'flex';
+        }
+
+        function onError(e) {
+            if (loadToken !== streamLoadToken) return;
+            console.log('[Native HLS Error]', e);
+            // Only show error if video is actually not playing
+            setTimeout(function() {
+                if (video.paused && loadState !== 'playing') {
+                    if (ch.needsProxy) {
+                        showError('Proxy connection failed. Channel may be offline.');
+                    } else {
+                        showError('Direct connection failed. Channel may be offline.');
+                    }
+                }
+            }, 3000);
+        }
+
+        function onStalled() {
+            if (loadToken !== streamLoadToken) return;
+            loadingText.textContent = 'Buffering...';
+            loadingOverlay.style.display = 'flex';
+        }
+
+        // Store event listeners for cleanup
+        currentHls = {
+            destroy: function() {
+                video.removeEventListener('loadedmetadata', onLoadedMetadata);
+                video.removeEventListener('playing', onPlaying);
+                video.removeEventListener('waiting', onWaiting);
+                video.removeEventListener('error', onError);
+                video.removeEventListener('stalled', onStalled);
+                video.removeEventListener('pause', onPause);
+                video.pause();
+                video.removeAttribute('src');
+                video.load();
+            },
+            startLoad: function() {
+                video.load();
+            }
+        };
+
+        function onPause() {
+            if (loadToken !== streamLoadToken) return;
+            if (!video.ended && loadState === 'playing' && !video.seeking) {
+                setTimeout(() => {
+                    if (video.paused && loadState === 'playing') video.play().catch(() => {});
+                }, 500);
+            }
+        }
+
+        video.addEventListener('loadedmetadata', onLoadedMetadata);
+        video.addEventListener('playing', onPlaying);
+        video.addEventListener('waiting', onWaiting);
+        video.addEventListener('error', onError);
+        video.addEventListener('stalled', onStalled);
+        video.addEventListener('pause', onPause);
+
+        // Quality button shows "NATIVE" for native playback
+        qualityBtn.textContent = 'NATIVE';
+        currentLevels = [];
+        buildQualityMenu();
+    }
+
     // ===================== HLS INIT =====================
     function initHls(url, ch, loadToken) {
         if (loadToken !== streamLoadToken) return;
-        if (!Hls.isSupported()) { showError('Browser does not support HLS.'); return; }
+
+        // Check if Hls.js is available and supported
+        const hlsJsAvailable = (typeof Hls !== 'undefined') && Hls.isSupported && Hls.isSupported();
+        // Check for native HLS support (Safari, iOS, some Android)
+        const nativeHlsSupported = video.canPlayType && video.canPlayType('application/vnd.apple.mpegurl') !== '';
+
+        if (!hlsJsAvailable && !nativeHlsSupported) {
+            showError('Browser does not support HLS. Please try a different browser or device.');
+            return;
+        }
+
+        // If native HLS is supported but hls.js is not, use native playback
+        if (!hlsJsAvailable && nativeHlsSupported) {
+            initNativeHls(url, ch, loadToken);
+            return;
+        }
 
         const config = {
             maxBufferLength: 8,
