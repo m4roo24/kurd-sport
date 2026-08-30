@@ -1,7 +1,6 @@
 {
   "rewrites": [
-    { "source": "/proxy.php", "destination": "/api/proxy.js" },
-    { "source": "/api/proxy", "destination": "/api/proxy.js" },
+    { "source": "/proxy.php", "destination": "/api/proxy" },
     { "source": "/live/:channel", "destination": "/index.html" },
     { "source": "/live/:channel/", "destination": "/index.html" }
   ],
