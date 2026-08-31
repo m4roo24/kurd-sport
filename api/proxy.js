@@ -1,39 +1,51 @@
+import fetch from 'node-fetch'; // If using an older Node template, otherwise native fetch is fine
+
 export default async function handler(req, res) {
-    // 1. Enable CORS so your web player can read the stream safely
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-    res.setHeader('Cache-Control', 'no-cache, must-revalidate');
-
-    if (req.method === 'OPTIONS') {
-        return res.status(200).end();
-    }
-
-    // 2. Grab the live video link passed in the URL
-    const streamUrl = req.query.url;
+    // Grab the incoming URL parameter
+    const streamUrl = req.query.url || req.query.stream; // Handles both ?url= and ?stream=
+    
     if (!streamUrl) {
-        return res.status(400).send('Error: Missing stream "url" parameter.');
+        return res.status(400).send('Error: Missing stream URL parameter.');
     }
 
     try {
-        // 3. Fetch the video chunk from the source server
         const response = await fetch(streamUrl, {
             headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+                // Pass Range headers if the video player requests specific chunks
+                'Range': req.headers.range || '' 
             }
         });
 
-        if (!response.ok) {
-            return res.status(response.status).send('Streaming server error');
+        // Forward the correct media headers back to the player
+        res.setHeader('Content-Type', response.headers.get('content-type') || 'application/x-mpegURL');
+        if (response.headers.get('content-range')) {
+            res.setHeader('Content-Range', response.headers.get('content-range'));
+        }
+        
+        // Dynamic streaming: Pipe the video chunks instantly without saving to memory
+        const reader = response.body;
+        if (reader && typeof reader.pipe === 'function') {
+            reader.pipe(res);
+        } else if (reader && typeof reader.getReader === 'function') {
+            // Fallback for newer web-streams API environment
+            const webReader = reader.getReader();
+            while (true) {
+                const { done, value } = await webReader.read();
+                if (done) break;
+                res.write(value);
+            }
+            res.end();
+        } else {
+            // Ultimate fallback
+            const buffer = await response.arrayBuffer();
+            res.send(Buffer.from(buffer));
         }
 
-        // 4. Pass the streaming headers back to your user's player
-        res.setHeader('Content-Type', response.headers.get('content-type') || 'application/x-mpegURL');
-
-        // 5. Pipe the video file chunks seamlessly
-        const arrayBuffer = await response.arrayBuffer();
-        return res.status(200).send(Buffer.from(arrayBuffer));
-
     } catch (error) {
-        return res.status(500).send('Proxy Connection Failed');
+        console.error('Streaming error:', error);
+        if (!res.headersSent) {
+            res.status(500).send('Proxy Connection Failed');
+        }
     }
 }
