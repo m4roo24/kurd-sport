@@ -1,6 +1,9 @@
 {
   "rewrites": [
-    { "source": "/proxy.php", "destination": "/api/proxy?stream=:stream&url=:url" },
+    { 
+      "source": "/proxy.php", 
+      "destination": "/api/proxy" 
+    },
     { "source": "/live/:channel", "destination": "/index.html" },
     { "source": "/live/:channel/", "destination": "/index.html" }
   ],
@@ -11,8 +14,7 @@
         { "key": "Access-Control-Allow-Origin", "value": "*" },
         { "key": "Access-Control-Allow-Methods", "value": "GET, OPTIONS" },
         { "key": "Access-Control-Allow-Headers", "value": "Range, Content-Type, Authorization" },
-        { "key": "Access-Control-Expose-Headers", "value": "Content-Length, Content-Range, Content-Type" },
-        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+        { "key": "Access-Control-Expose-Headers", "value": "Content-Length, Content-Range, Content-Type" }
       ]
     }
   ]
