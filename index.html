@@ -2662,9 +2662,18 @@
         const hlsJsAvailable = (typeof Hls !== 'undefined') && Hls.isSupported && Hls.isSupported();
         // Check for native HLS support (Safari, iOS, some Android)
         const nativeHlsSupported = video.canPlayType && video.canPlayType('application/vnd.apple.mpegurl') !== '';
+        // Detect iOS devices (iPhone, iPad, iPod) - force native HLS on iOS
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 
         if (!hlsJsAvailable && !nativeHlsSupported) {
             showError('Browser does not support HLS. Please try a different browser or device.');
+            return;
+        }
+
+        // Force native HLS on iOS devices - HLS.js is unreliable on iOS
+        if (isIOS && nativeHlsSupported) {
+            console.log('[iOS Detected] Forcing native HLS playback');
+            initNativeHls(url, ch, loadToken);
             return;
         }
 
