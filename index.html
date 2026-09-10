@@ -2275,7 +2275,7 @@
 
     function getChannelUrl(ch) {
         if (ch.needsProxy) {
-            return 'https://ais-pre-dcdxo75di2bfth4cokp6az-167083655366.europe-west2.run.app/api/stream-proxy?url=' + encodeURIComponent(ch.url) + '&_cb=' + Date.now();
+            return 'https://yara-proxy.maroduhoki6.workers.dev/?url=' + encodeURIComponent(ch.url) + '&_cb=' + Date.now();
         }
         return ch.url;
     }
