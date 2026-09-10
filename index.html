@@ -2078,7 +2078,7 @@
     let channels = [
         { name: 'Biner TV', url: 'https://lbgo.bozztv.com/ssh101/live/biner-zaxo/playlist.m3u8', category: 'Kurdish Sports', needsProxy: true, logo: 'https://m4roo24.github.io/kurd-sport/binertv.png' },
         { name: 'Gewher Sport', url: 'https://cdn.karwan.tv/gewher-sport/index.m3u8', category: 'Kurdish Sports', needsProxy: true, logo: 'https://m4roo24.github.io/kurd-sport/gewhersport.png' },
-        { name: 'Bein Sport 1', url: 'https://cccci.site//live/1000/1000/78395.m3u8', category: 'BeIN Sports', needsProxy: true, logo: 'https://m4roo24.github.io/kurd-sport/beinsport1.png' },
+        { name: 'Bein Sport 1', url: 'https://cccci.site//live/1000/1000/78395.m3u8', category: 'BeIN Sports', needsProxy: false, logo: 'https://m4roo24.github.io/kurd-sport/beinsport1.png' },
         { name: 'Bein Sport 2', url: 'https://cccci.site//live/1000/1000/78403.m3u8', category: 'BeIN Sports', needsProxy: true, logo: 'https://m4roo24.github.io/kurd-sport/beinsport2.png' },
         { name: 'Bein Sport 3', url: 'https://cccci.site//live/1000/1000/78402.m3u8', category: 'BeIN Sports', needsProxy: true, logo: 'https://m4roo24.github.io/kurd-sport/beinsport3.png' },
         { name: 'Bein Sport 4', url: 'https://cccci.site//live/1000/1000/78401.m3u8', category: 'BeIN Sports', needsProxy: true, logo: 'https://m4roo24.github.io/kurd-sport/beinsport4.png' },
@@ -2277,7 +2277,7 @@
 
     function getChannelUrl(ch) {
         if (ch.needsProxy) {
-            return 'https://yara-proxy.maroduhoki6.workers.dev/?url=' + encodeURIComponent(ch.url) + '&_cb=' + Date.now();
+            return 'https://footfytv.pro/proxy/direct?url=' + encodeURIComponent(ch.url) + '&_cb=' + Date.now();
         }
         return ch.url;
     }
