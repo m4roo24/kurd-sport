@@ -1638,6 +1638,24 @@
     <script src="https://analytics.ahrefs.com/analytics.js" data-key="LiRLZSQ1ef+4nu7bQIsJzg" async></script>
 </head>
 <body>
+    <!-- Access Code Lock -->
+    <div class="telegram-popup-overlay show" id="accessLockOverlay" style="z-index:99999;">
+        <div class="telegram-popup">
+            <div class="telegram-popup-header" style="background:linear-gradient(135deg, #7c3aed, #6d28d9);">
+                <div class="tg-icon-bg"><i class="fas fa-lock"></i></div>
+                <h2>Channels Locked</h2>
+                <p>Enter the access code to watch all channels</p>
+            </div>
+            <div class="telegram-popup-body">
+                <div class="input-group" style="margin-bottom:14px;">
+                    <input type="text" id="accessCodeInput" placeholder="ACCESS CODE" autocomplete="off" style="width:100%; padding:13px; border-radius:10px; border:1px solid var(--border); background:var(--bg-input); color:var(--text-primary); text-align:center; font-weight:800; letter-spacing:3px; outline:none;">
+                </div>
+                <button class="telegram-popup-btn" style="background:linear-gradient(135deg, #7c3aed, #6d28d9);" onclick="unlockChannels()"><i class="fas fa-unlock"></i> Unlock Channels</button>
+                <div id="accessError" style="color:var(--live-red); font-size:0.8rem; margin-top:12px; display:none; font-weight:600;"><i class="fas fa-exclamation-circle"></i> Wrong code &mdash; try again</div>
+            </div>
+        </div>
+    </div>
+
     <!-- Telegram Join Popup -->
     <div class="telegram-popup-overlay" id="telegramPopup">
         <div class="telegram-popup">
@@ -1779,7 +1797,7 @@
     </div>
 
     <div class="footer">
-        <p>Kurd Sport TV &copy; 2026 — <a href="https://kurd-sport.vercel.app/terms.html" target="_blank">Terms</a> | <a href="https://kurd-sport.vercel.app/privacy.html" target="_blank">Privacy</a> | <a href="https://kurd-sport.vercel.app/faq.html" target="_blank">FAQ</a></p>
+        <p>Kurd Sport TV &copy; 2026 — <a href="https://kurd-sport.vercel.app/faq.html" target="_blank">FAQ</a></p>
     </div>
 
     <div class="settings-overlay" id="settingsOverlay" onclick="closeSettings(event)"></div>
@@ -1861,15 +1879,21 @@
                     </div>
                 </div>
             </div>
+                        <!-- Channel Access -->
             <div class="settings-section">
+                <h3><i class="fas fa-lock"></i> Channel Access</h3>
+                <p class="settings-desc">Channels are locked. Enter the access code to unlock them on this browser.</p>
+                <div class="input-group">
+                    <input type="text" id="settingsAccessCode" class="settings-input" placeholder="Access code" autocomplete="off">
+                    <button class="settings-btn-primary" onclick="unlockFromSettings()"><i class="fas fa-unlock"></i> Unlock Channels</button>
+                    <button class="settings-btn-primary" style="background:var(--bg-input); color:var(--text-secondary);" onclick="lockChannels()"><i class="fas fa-lock"></i> Lock Channels Again</button>
+                </div>
+                <div id="settingsAccessMsg" style="font-size:0.78rem; margin-top:8px; display:none; font-weight:600;"></div>
+            </div>
+
+<div class="settings-section">
                 <h3><i class="fas fa-external-link-alt"></i> Links</h3>
                 <div class="social-links">
-                    <a href="https://kurd-sport.vercel.app/terms.html" target="_blank" class="social-btn email" tabindex="0">
-                        <i class="fas fa-file-contract"></i> Terms of Service
-                    </a>
-                    <a href="https://kurd-sport.vercel.app/privacy.html" target="_blank" class="social-btn email" tabindex="0">
-                        <i class="fas fa-shield-alt"></i> Privacy Policy
-                    </a>
                     <a href="https://kurd-sport.vercel.app/faq.html" target="_blank" class="social-btn email" tabindex="0">
                         <i class="fas fa-question-circle"></i> FAQ
                     </a>
@@ -2664,6 +2688,13 @@
     function initHls(url, ch, loadToken) {
         if (loadToken !== streamLoadToken) return;
 
+        // Raw .ts stream support: play directly via native video
+        if (/\.ts($|\?)/i.test(url) && url.indexOf('.m3u8') === -1) {
+            console.log('[TS] Native playback for', url);
+            initNativeHls(url, ch, loadToken);
+            return;
+        }
+
         // Check if Hls.js is available and supported
         const hlsJsAvailable = (typeof Hls !== 'undefined') && Hls.isSupported && Hls.isSupported();
         // Check for native HLS support (Safari, iOS, some Android)
@@ -2729,6 +2760,33 @@
             testBandwidth: true,
             xhrSetup: function(xhr) { xhr.withCredentials = false; }
         };
+
+        // ---- Premium users: faster stream startup & lower latency ----
+        let premActive = false;
+        try {
+            const premRaw = localStorage.getItem('yara_premium');
+            if (premRaw) {
+                const premData = JSON.parse(premRaw);
+                premActive = !premData.expires || Date.now() < premData.expires;
+            }
+        } catch(e) { premActive = false; }
+        if (premActive) {
+            Object.assign(config, {
+                maxBufferLength: 20,
+                maxMaxBufferLength: 60,
+                liveSyncDurationCount: 1,
+                liveMaxLatencyDurationCount: 4,
+                liveBackBufferLength: 10,
+                backBufferLength: 10,
+                lowLatencyMode: true,
+                manifestLoadingTimeOut: 10000,
+                fragLoadingTimeOut: 15000,
+                fragLoadingMaxRetry: 12,
+                startLevel: -1,
+                maxStarvationDelay: 2,
+                maxBufferHole: 0.5
+            });
+        }
 
         currentHls = new Hls(config);
         if (dataSaverEnabled && currentHls) {
@@ -3584,6 +3642,83 @@
     loadPreferences();
     updatePlayButton();
     
+    // ===================== ACCESS CODE GATE (KURD2026) =====================
+    const ACCESS_CODE = 'KURD2026';
+    const ACCESS_KEY = 'kurd_access_granted';
+    const isGranted = () => localStorage.getItem(ACCESS_KEY) === '1';
+    const accessOverlay = document.getElementById('accessLockOverlay');
+    const refreshOv = () => { if (accessOverlay) accessOverlay.style.display = isGranted() ? 'none' : 'flex'; };
+
+    window.unlockChannels = function() {
+        const inp = document.getElementById('accessCodeInput');
+        const err = document.getElementById('accessError');
+        if (inp && inp.value.trim().toUpperCase() === ACCESS_CODE) {
+            localStorage.setItem(ACCESS_KEY, '1');
+            refreshOv();
+            renderCategoryTabs();
+            renderChannels();
+            const cc = document.getElementById('channelCount'); if (cc) cc.textContent = channels.length;
+            if (currentChannelIndex < 0 && channels.length) loadChannel(0);
+            if (typeof showToast === 'function') { try { showToast('All channels unlocked!', 'fas fa-unlock'); } catch(e) {} }
+        } else if (err) { err.style.display = 'block'; if (inp) inp.value = ''; }
+    };
+
+    window.unlockFromSettings = function() {
+        const inp = document.getElementById('settingsAccessCode');
+        const msg = document.getElementById('settingsAccessMsg');
+        if (inp && inp.value.trim().toUpperCase() === ACCESS_CODE) {
+            localStorage.setItem(ACCESS_KEY, '1');
+            refreshOv();
+            renderCategoryTabs();
+            renderChannels();
+            const cc = document.getElementById('channelCount'); if (cc) cc.textContent = channels.length;
+            if (currentChannelIndex < 0 && channels.length) loadChannel(0);
+            inp.value = '';
+            if (msg) { msg.style.color = 'var(--success)'; msg.textContent = 'Channels unlocked!'; msg.style.display = 'block'; setTimeout(() => { msg.style.display = 'none'; }, 3000); }
+        } else if (msg) {
+            msg.style.color = 'var(--live-red)'; msg.textContent = 'Wrong code, try again.'; msg.style.display = 'block';
+            setTimeout(() => { msg.style.display = 'none'; }, 3000);
+        }
+    };
+
+    window.lockChannels = function() {
+        localStorage.removeItem(ACCESS_KEY);
+        refreshOv();
+        renderChannels();
+        if (typeof showToast === 'function') { try { showToast('Channels locked', 'fas fa-lock'); } catch(e) {} }
+    };
+
+    // Enter key on overlay input
+    const accInp = document.getElementById('accessCodeInput');
+    if (accInp) accInp.addEventListener('keydown', e => { if (e.key === 'Enter') window.unlockChannels(); });
+    const setInp = document.getElementById('settingsAccessCode');
+    if (setInp) setInp.addEventListener('keydown', e => { if (e.key === 'Enter') window.unlockFromSettings(); });
+
+    // Gate channel list
+    const _origRenderChannels = renderChannels;
+    renderChannels = function() {
+        const listEl = document.getElementById('channelList');
+        if (!listEl) return;
+        if (!isGranted()) {
+            listEl.innerHTML = '<div style="padding:40px 20px; text-align: center;">'
+                + '<i class="fas fa-lock" style="font-size:2.2rem; color:var(--primary-light); margin-bottom:10px;"></i>'
+                + '<div style="font-weight:700; margin-bottom:4px;">Channels Locked</div>'
+                + '<div style="font-size:0.8rem; color:var(--text-muted);">Enter the access code above to view all channels.</div></div>';
+            const cc2 = document.getElementById('channelCount'); if (cc2) cc2.textContent = '0';
+            return;
+        }
+        _origRenderChannels();
+    };
+
+    // Gate playback
+    const _origLoadChannel = loadChannel;
+    loadChannel = function(idx) {
+        if (!isGranted()) { refreshOv(); return; }
+        _origLoadChannel(idx);
+    };
+
+    refreshOv();
+    // ===================== END ACCESS CODE GATE =====================
     initChannels();
     </script>
 
