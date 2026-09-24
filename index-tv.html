@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, interactive-widget=resizes-content">
     <meta name="msapplication-TileColor" content="#7c3aed">
     <meta name="tv" content="true">
-    <title>Kurd Sport - Sports Live</title>
+    <title>Kurd Sport TV</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
@@ -1430,6 +1430,69 @@
         /* Native-controls mode: let the browser handle gestures */
         #playerWrapper { touch-action: none; }
         /* Keep the red LIVE badge style consistent if native controls show duration */
+
+        /* ================= TV VERSION ================= */
+        html { font-size: 20px; }
+        body.tv-mode { cursor: default; }
+        .header { padding: 20px 28px; }
+        .logo-icon { width: 64px; height: 64px; }
+        .logo-text { font-size: 1.8rem; }
+        .logo-sub { font-size: 1rem; }
+        .settings-btn, .cast-btn { width: 56px; height: 56px; font-size: 1.6rem; }
+        .main-container { max-width: 100%; }
+        .ch-number { width: 130px; height: 76px; font-size: 1.1rem; }
+        .ch-name { font-size: 1.15rem; }
+        .ch-category { font-size: 1rem; }
+        .channel-item { padding: 16px 18px; }
+        .cat-tab { font-size: 1.1rem; padding: 10px 22px; }
+        .channel-list { max-height: 70vh; }
+        .channel-icon { width: 120px; height: 72px; font-size: 1.2rem; }
+        .channel-details h3 { font-size: 1.4rem; }
+        .channel-details p { font-size: 1.05rem; }
+        .stream-status { font-size: 1rem; padding: 8px 20px; }
+        .ch-nav-btn { font-size: 1.15rem; padding: 14px 20px; max-width: 220px; }
+        .ch-nav-number { font-size: 1.4rem; }
+        .settings-panel { width: 560px; right: -600px; }
+        .settings-panel.open { right: 0; }
+        .settings-input { font-size: 1.15rem; padding: 16px 18px; }
+        .settings-btn-primary { font-size: 1.15rem; padding: 16px; }
+        .checkbox-label { font-size: 1.05rem; }
+        .settings-section h3 { font-size: 1.25rem; }
+        .settings-desc { font-size: 1rem; }
+        .faq-question { font-size: 1.15rem; padding: 18px 20px; }
+        .faq-answer p { font-size: 1.05rem; }
+        .virtual-remote-btn { font-size: 1.5rem; }
+        .control-toast { font-size: 1.2rem; padding: 16px 28px; }
+        .retry-btn { font-size: 1.2rem; padding: 16px 36px; }
+        .error-text { font-size: 1.2rem; }
+        .loading-text { font-size: 1.3rem; }
+        .channel-count { font-size: 1rem; padding: 4px 16px; }
+        .sidebar-header h2 { font-size: 1.35rem; }
+        /* hide mouse cursor after 3s idle (restored on any key/remote press) */
+        body.tv-mode.idle { cursor: none; }
+        body.tv-mode.idle .header,
+        body.tv-mode.idle .sidebar,
+        body.tv-mode.idle .ch-nav-row,
+        body.tv-mode.idle .channel-info-bar { opacity: 0.15; transition: opacity 0.5s ease; }
+        .header, .sidebar, .ch-nav-row, .channel-info-bar { transition: opacity 0.3s ease; }
+        /* telegram join popup disabled on TV */
+        #telegramPopup { display: none !important; }
+        /* strong focus ring for remote navigation */
+        body.tv-mode .channel-item:focus,
+        body.tv-mode .cat-tab:focus,
+        body.tv-mode .ch-nav-btn:focus,
+        body.tv-mode .control-btn:focus,
+        body.tv-mode .settings-btn:focus,
+        body.tv-mode .cast-btn:focus,
+        body.tv-mode .retry-btn:focus,
+        body.tv-mode .settings-btn-primary:focus,
+        body.tv-mode .faq-question:focus {
+            outline: 4px solid var(--primary-light) !important;
+            outline-offset: 4px;
+            box-shadow: 0 0 0 10px var(--focus-ring) !important;
+            border-radius: 12px;
+            transform: scale(1.03);
+        }
     </style>
 
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -1637,7 +1700,7 @@
 
     <script src="https://analytics.ahrefs.com/analytics.js" data-key="LiRLZSQ1ef+4nu7bQIsJzg" async></script>
 </head>
-<body>
+<body class="tv-mode">
     <!-- Access Code Lock -->
     <div class="telegram-popup-overlay show" id="accessLockOverlay" style="z-index:99999;">
         <div class="telegram-popup">
@@ -3861,6 +3924,79 @@
             }, 800);
         });
         setTimeout(function () { location.reload(); }, 15 * 60 * 1000);
+    })();
+
+    /* ================= TV REMOTE CONTROL ================= */
+    (function () {
+        // Idle cursor/panels hiding
+        var idleTimer = null;
+        function resetIdle() {
+            document.body.classList.remove('idle');
+            clearTimeout(idleTimer);
+            idleTimer = setTimeout(function () { document.body.classList.add('idle'); }, 3000);
+        }
+        document.addEventListener('mousemove', resetIdle);
+        document.addEventListener('keydown', resetIdle);
+        resetIdle();
+
+        // Auto-play first channel on load (TV should start playing immediately)
+        window.addEventListener('DOMContentLoaded', function () {
+            setTimeout(function () {
+                try {
+                    if (typeof loadChannel === 'function' && channels && channels.length && currentChannelIndex < 0) {
+                        loadChannel(0);
+                    }
+                } catch (e) {}
+            }, 1500);
+        });
+
+        // Focusable elements in visual order for remote navigation
+        function getFocusables() {
+            return Array.prototype.slice.call(document.querySelectorAll(
+                '.channel-item, .cat-tab, .ch-nav-btn, .control-btn, .settings-btn, .cast-btn, .retry-btn, .settings-btn-primary, .faq-question, .virtual-remote-btn, .telegram-popup-btn, .virtual-remote-action'
+            )).filter(function (el) { return el.offsetParent !== null; });
+        }
+
+        function moveFocus(dir) {
+            var els = getFocusables();
+            if (!els.length) return;
+            var idx = els.indexOf(document.activeElement);
+            if (idx === -1) { els[dir > 0 ? 0 : els.length - 1].focus(); return; }
+            els[(idx + dir + els.length) % els.length].focus();
+        }
+
+        document.addEventListener('keydown', function (e) {
+            // Arrow navigation
+            if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { moveFocus(1); e.preventDefault(); }
+            else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { moveFocus(-1); e.preventDefault(); }
+            // Enter activates focused element
+            else if (e.key === 'Enter' && document.activeElement && document.activeElement !== document.body) {
+                if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'SELECT') return;
+                document.activeElement.click(); e.preventDefault();
+            }
+            // Channel +/- (remote CH buttons / PgUp PgDn)
+            else if (e.key === 'ChannelUp' || e.key === 'PageUp' || e.key === '+') {
+                if (typeof loadChannel === 'function' && channels && channels.length) {
+                    loadChannel((currentChannelIndex + 1) % channels.length); e.preventDefault();
+                }
+            }
+            else if (e.key === 'ChannelDown' || e.key === 'PageDown' || e.key === '-') {
+                if (typeof loadChannel === 'function' && channels && channels.length) {
+                    loadChannel((currentChannelIndex - 1 + channels.length) % channels.length); e.preventDefault();
+                }
+            }
+            // Number keys: jump straight to channel N (1-9, 0 = 10)
+            else if (/^[0-9]$/.test(e.key)) {
+                var n = (parseInt(e.key, 10) + 9) % 10;
+                if (typeof loadChannel === 'function' && channels && n < channels.length) {
+                    loadChannel(n); e.preventDefault();
+                }
+            }
+            // Backspace/Esc: exit fullscreen first
+            else if (e.key === 'Backspace' || e.key === 'Escape') {
+                if (document.fullscreenElement) { document.exitFullscreen(); e.preventDefault(); }
+            }
+        });
     })();
 </script>
 
