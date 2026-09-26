@@ -2377,7 +2377,7 @@
                 if (currentHls) { try { currentHls.destroy(); } catch(e) {} currentHls = null; }
                 video.removeAttribute('src');
                 tryLoad();
-            }, 12000);
+            }, 9000);
 
             // Watchdog B: mid-playback token expiry -> fresh re-request of original URL
             if (_failoverErrHandler) { video.removeEventListener('error', _failoverErrHandler); }
