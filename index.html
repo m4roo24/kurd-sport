@@ -1429,6 +1429,15 @@
 
         /* Native-controls mode: let the browser handle gestures */
         #playerWrapper { touch-action: none; }
+
+        /* === LIVE MODE: hide scrubber & timestamps, show only LIVE controls === */
+        #videoPlayer::-webkit-media-controls-timeline,
+        #videoPlayer::-webkit-media-controls-current-time-display,
+        #videoPlayer::-webkit-media-controls-time-remaining-display,
+        #videoPlayer::-webkit-media-controls-seek-back-button,
+        #videoPlayer::-webkit-media-controls-seek-forward-button {
+            display: none !important;
+        }
         /* Keep the red LIVE badge style consistent if native controls show duration */
     </style>
 
@@ -1690,7 +1699,7 @@
     </div>
 
     <header class="header">
-        <div class="logo-section">
+        <div class="logo-section" onclick="closeChannel()" title="Close channel / Stop stream" style="cursor:pointer;">
             <div class="logo-icon">
                 <img src="/icon-512x512.png" alt="Kurd Sport" onerror="this.style.display='none'">
             </div>
@@ -2775,12 +2784,28 @@
 
         function onPause() {
             if (loadToken !== streamLoadToken) return;
-            if (!video.ended && loadState === 'playing' && !video.seeking) {
-                setTimeout(() => {
-                    if (video.paused && loadState === 'playing') video.play().catch(() => {});
-                }, 500);
-            }
+            // Pause stays paused — no auto-resume (pause glitch fix)
         }
+
+        // === LIVE MODE: keep stream pinned to the live edge ===
+        function enforceLiveEdge() {
+            try {
+                if (!video.seekable || video.seekable.length === 0) return;
+                var edge = video.seekable.end(video.seekable.length - 1);
+                // if drifted more than 12s behind live, snap back to live
+                if (edge - video.currentTime > 12) {
+                    video.currentTime = Math.max(0, edge - 2);
+                }
+            } catch (e) {}
+        }
+        video.addEventListener('seeking', function () {
+            if (loadToken !== streamLoadToken) return;
+            setTimeout(enforceLiveEdge, 50);
+        });
+        video.addEventListener('durationchange', function () {
+            if (loadToken !== streamLoadToken) return;
+            enforceLiveEdge();
+        });
 
         video.addEventListener('loadedmetadata', onLoadedMetadata);
         video.addEventListener('playing', onPlaying);
@@ -2889,6 +2914,7 @@
                 liveMaxLatencyDurationCount: 4,
                 liveBackBufferLength: 10,
                 backBufferLength: 10,
+                liveDurationInfinity: true,
                 lowLatencyMode: true,
                 manifestLoadingTimeOut: 10000,
                 fragLoadingTimeOut: 15000,
@@ -2989,11 +3015,7 @@
 
         video.addEventListener('pause', () => {
             if (loadToken !== streamLoadToken) return;
-            if (!video.ended && loadState === 'playing' && !video.seeking) {
-                setTimeout(() => {
-                    if (video.paused && loadState === 'playing') video.play().catch(() => {});
-                }, 500);
-            }
+            // Pause stays paused — no auto-resume (pause glitch fix)
         });
 
         currentHls.on(Hls.Events.LEVEL_SWITCHED, (event, data) => {
@@ -3218,28 +3240,30 @@
     function tvGreenButton() { showToast('Green: Fullscreen', 'fas fa-expand'); toggleFullscreen(); }
     function tvYellowButton() { showToast('Yellow: Mute', 'fas fa-volume-mute'); toggleMute(); }
     function tvBlueButton() { showToast('Blue: Controls Help', 'fas fa-gamepad'); showControlsHelp(); }
-    function tvPowerButton() {
-        showToast('Power: Stop Stream', 'fas fa-power-off');
+    function closeChannel() {
+        if (currentChannelIndex < 0 && video.paused && !video.currentSrc) return;
+        showToast('Channel Closed', 'fas fa-power-off');
         cleanupStream();
         video.pause();
+        video.removeAttribute('src');
+        try { video.load(); } catch (e) {}
         document.getElementById('currentChannelName').textContent = 'Select Football Channel';
         document.getElementById('currentChannelCategory').textContent = 'Direct Stream';
         const currentIcon = document.getElementById('currentChannelIcon');
-        if (ch.logo) {
-            currentIcon.innerHTML = '<img src="' + ch.logo + '" alt="' + ch.name + '" style="width:100%;height:100%;object-fit:contain;border-radius:12px;" onerror="this.style.display=\'none\';this.parentElement.innerHTML=\'<span style=font-size:1.4rem;>⚽️</span>\'">';
-            currentIcon.style.background = 'transparent';
-        } else {
-            currentIcon.innerHTML = '<span style="font-size:1.4rem;">⚽️</span>';
-            currentIcon.style.background = 'linear-gradient(135deg, var(--primary), var(--primary-dark))';
-        }
+        currentIcon.innerHTML = '<span style="font-size:1.4rem;">⚽️</span>';
+        currentIcon.style.background = 'linear-gradient(135deg, var(--primary), var(--primary-dark))';
         streamStatus.className = 'stream-status checking';
         streamStatus.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Ready';
         currentChannelIndex = -1;
-        
         renderChannels();
         if (window.location.pathname !== '/') {
             window.history.pushState({}, '', '/');
         }
+    }
+
+    function tvPowerButton() {
+        showToast('Power: Stop Stream', 'fas fa-power-off');
+        closeChannel();
     }
     function tvHomeButton() {
         showToast('Home: Scroll to Top', 'fas fa-home');
@@ -3626,8 +3650,10 @@
             const keyCode = e.keyCode || e.which;
             const key = e.key;
             const focused = document.activeElement;
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') {
-                if (matchesKey(e, TV_KEYS.BACK)) { e.preventDefault(); e.target.blur(); }
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT' || e.target.isContentEditable) {
+                // While typing, ALL keys must behave normally (incl. Backspace/Delete).
+                // Only a real TV Back key (not Backspace!) exits the field.
+                if (keyCode === 27 || keyCode === 461 || keyCode === 10009) { e.preventDefault(); e.target.blur(); }
                 return;
             }
             if ((key >= '0' && key <= '9') || (keyCode >= 96 && keyCode <= 105)) {
@@ -3864,7 +3890,7 @@
                 } catch (e) {}
             }, 800);
         });
-        setTimeout(function () { location.reload(); }, 5 * 60 * 1000);
+        // Auto-refresh removed — page no longer reloads automatically
     })();
 </script>
 
@@ -4439,6 +4465,7 @@
         } else if (typeof Hls !== 'undefined' && Hls.isSupported()) {
             hls = new Hls({
                 enableWorker: true,
+                liveDurationInfinity: true,
                 lowLatencyMode: false,
                 capLevelToPlayerSize: true,
                 startLevel: 0,                // FORCE lowest quality immediately
