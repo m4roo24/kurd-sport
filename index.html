@@ -4191,5 +4191,35 @@ document.addEventListener('DOMContentLoaded', function(){
   setLang(KS_LANG);
 });
 </script>
+
+<script>
+/* ===== AUTO-REFRESH + ANTI-CACHE ===== */
+(function(){
+  var VER = '3'; /* <- increase this number every time you upload a new version */
+  /* 1) New version? Force fresh load (fixes "back to old version" problem) */
+  var saved = null;
+  try { saved = localStorage.getItem('ks_ver'); localStorage.setItem('ks_ver', VER); } catch(e){}
+  if (saved !== null && saved !== VER) {
+    location.replace(location.pathname + '?v=' + Date.now());
+    return;
+  }
+  /* 2) Auto refresh at 3:00, 3:15, 3:30 AM */
+  var TARGETS = [180, 195, 210]; /* minutes after midnight */
+  function check(){
+    var d = new Date();
+    var now = d.getHours()*60 + d.getMinutes();
+    for (var i=0;i<TARGETS.length;i++){
+      if (now === TARGETS[i]){ /* exactly 3:00 / 3:15 / 3:30 - refresh ONLY at these times */
+        var k = 'ks_rf_' + d.toDateString() + '_' + TARGETS[i];
+        var done = false;
+        try { done = localStorage.getItem(k); if(!done) localStorage.setItem(k,'1'); } catch(e){}
+        if (!done) { location.reload(); return; }
+      }
+    }
+  }
+  setInterval(check, 30000);
+  check();
+})();
+</script>
 </body>
 </html>
