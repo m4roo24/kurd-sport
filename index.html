@@ -2266,6 +2266,7 @@ body{background-attachment:fixed;background-repeat:no-repeat;background-image:ra
     function closeChannel() {
         if (currentChannelIndex < 0 && video.paused && !video.currentSrc) return;
         showToast('Channel Closed', 'fas fa-power-off');
+        try { localStorage.removeItem('kurdSport_lastChannel'); } catch(e) {}
         cleanupStream();
         video.pause();
         video.removeAttribute('src');
@@ -3715,6 +3716,7 @@ body{background-attachment:fixed;background-repeat:no-repeat;background-image:ra
             window.scrollTo({ top: 0 });
         }
         function goHome() {
+            try { localStorage.removeItem('kurdSport_lastChannel'); } catch(e) {}
             document.getElementById('liveView').classList.remove('show');
             document.getElementById('homeView').style.display = 'block';
             if (typeof cleanupStream === 'function') cleanupStream();
@@ -3860,8 +3862,8 @@ body{background-attachment:fixed;background-repeat:no-repeat;background-image:ra
     // visitor messages and reply to them (replies appear on the visitor screen).
     // Get a free bot from @BotFather on Telegram. Chat ID = your numeric user ID
     // (get it from @userinfobot). If left empty, messages are stored locally only.
-    const HELP_OWNER_BOT_TOKEN = '';
-    const HELP_OWNER_CHAT_ID = '';
+    const HELP_OWNER_BOT_TOKEN = '8902912844:AAHXHIRHpjjVsFqyZqx5epLYoDddspmiM6U';
+    const HELP_OWNER_CHAT_ID = '-1004329555368';
 
     (function () {
         var HELPER = {};
