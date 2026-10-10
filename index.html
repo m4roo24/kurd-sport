@@ -4224,5 +4224,387 @@ document.addEventListener('DOMContentLoaded', function(){
   check();
 })();
 </script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<script>
+/* ============================================================
+   Kurd Sport — Owner Panel + Live Channel Sync  (FIREBASE)
+   ============================================================ */
+(function () {
+  'use strict';
+
+  const FIREBASE_CONFIG = {
+    apiKey: "AIzaSyAJcKtLCAnup-vCwZNg4ivntweck73Wzgk",
+    authDomain: "kurdsport12-2ab6a.firebaseapp.com",
+    databaseURL: "https://kurdsport12-2ab6a-default-rtdb.firebaseio.com",
+    projectId: "kurdsport12-2ab6a"
+  };
+  const OWNER_EMAIL = "";
+  const KS_CONFIGURED = !FIREBASE_CONFIG.apiKey.includes('PASTE') &&
+                        !FIREBASE_CONFIG.databaseURL.includes('PASTE');
+
+  let auth = null, db = null;
+  if (KS_CONFIGURED && window.firebase) {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    auth = firebase.auth();
+    db = firebase.database();
+  }
+
+  let remoteChannels = [];
+
+  /* Rebuild homepage tabs + grid (site's own renderHomeGrid is IIFE-local) */
+  function refreshHome() {
+    try {
+      if (typeof channels === 'undefined') return;
+      if (typeof window.__ksHomeCat === 'undefined') window.__ksHomeCat = 'All';
+      const cats = ['All', ...new Set(channels.map(c => c.category))];
+      if (!cats.includes(window.__ksHomeCat)) window.__ksHomeCat = 'All';
+      const tabsEl = document.getElementById('homeCategoryTabs');
+      if (tabsEl) {
+        tabsEl.innerHTML = '';
+        cats.forEach(cat => {
+          const btn = document.createElement('button');
+          btn.className = 'home-tab' + (cat === window.__ksHomeCat ? ' active' : '');
+          btn.textContent = cat;
+          btn.onclick = () => { window.__ksHomeCat = cat; refreshHome(); };
+          tabsEl.appendChild(btn);
+        });
+      }
+      const grid = document.getElementById('channelGrid');
+      if (!grid) return;
+      grid.innerHTML = '';
+      const filtered = window.__ksHomeCat === 'All' ? channels : channels.filter(ch => ch.category === window.__ksHomeCat);
+      filtered.forEach(ch => {
+        const idx = channels.indexOf(ch);
+        const card = document.createElement('div');
+        card.className = 'grid-card';
+        card.setAttribute('tabindex', '0');
+        card.setAttribute('role', 'button');
+        const logoHtml = ch.logo
+          ? '<img src="' + ch.logo + '" alt="' + ch.name + '" loading="lazy" decoding="async" onerror="this.style.display=\'none\';this.parentElement.innerHTML=\'<span class=grid-emoji>⚽️</span>\'">'
+          : '<span class="grid-emoji">⚽️</span>';
+        card.innerHTML = '<div class="grid-icon">' + logoHtml + '</div><div class="grid-name">' + ch.name + '</div>';
+        card.onclick = () => { if (typeof window.loadChannel === 'function') window.loadChannel(idx); };
+        grid.appendChild(card);
+      });
+    } catch (e) { console.error('refreshHome:', e); }
+  }
+
+  function applyRemote(list) {
+    remoteChannels = list.slice().sort((a, b) => (a.sort_order - b.sort_order) || String(a.name).localeCompare(b.name));
+    if (!KS_CONFIGURED) return;
+    const mapped = remoteChannels.filter(c => c.is_active).map(c => ({
+      name: c.name, url: c.stream_url, logo: c.logo_url || '',
+      category: c.category || 'Sports', needsProxy: true
+    }));
+    try {
+      if (typeof channels !== 'undefined') {
+        channels = mapped;
+        if (typeof currentChannelIndex !== 'undefined' && currentChannelIndex >= channels.length) currentChannelIndex = 0;
+        refreshHome();
+        if (typeof renderCategoryTabs === 'function') renderCategoryTabs();
+        if (typeof renderChannels === 'function') renderChannels();
+        const cnt = document.querySelector('.channel-count');
+        if (cnt) cnt.textContent = channels.length;
+      }
+    } catch (e) { console.error('applyRemote:', e); }
+    window.dispatchEvent(new CustomEvent('ks:channels', { detail: remoteChannels }));
+  }
+  window.applyRemoteChannels = applyRemote;
+
+  if (db) {
+    // Live channel add/edit/delete -> all visitors update instantly
+    db.ref('channels').on('value', snap => {
+      applyRemote(Object.values(snap.val() || {}));
+    });
+    // Owner "Refresh All Visitors" -> everyone's page reloads (once per tab, loop-proof)
+    db.ref('commands').limitToLast(1).on('value', snap => {
+      const val = snap.val() || {};
+      const key = Object.keys(val)[0];
+      if (!key) return;
+      const c = val[key];
+      if (c.cmd !== 'reload' || !c.ts) return;
+      if ((Date.now() - c.ts) >= 15000) return;
+      if (sessionStorage.getItem('ks_cmd_' + key)) return;
+      sessionStorage.setItem('ks_cmd_' + key, '1');
+      const last = Number(sessionStorage.getItem('ks_last_reload') || 0);
+      if (Date.now() - last < 60000) return;
+      sessionStorage.setItem('ks_last_reload', String(Date.now()));
+      location.reload();
+    });
+    // One-time import of your 43 channels (only if database is empty)
+    db.ref('channels').once('value', snap => {
+      if (snap.exists()) return;
+      const batch = {};
+      [{name:"Biner TV",stream_url:"https://lbgo.bozztv.com/ssh101/live/biner-zaxo/playlist.m3u8",logo_url:"https://kurdsport.online/binertv.png",category:"Kurdish Sports",is_active:true,sort_order:0},
+        {name:"AVA Sport",stream_url:"http://avrstream.com:1935/live/AvaSport/tracks-v1a1/mono.m3u8",logo_url:"https://kurdsport.online/ava-sport.png",category:"Kurdish Sports",is_active:true,sort_order:1},
+        {name:"NRT Sport",stream_url:"http://m3u.drm-26.com/live/Mkdtv1_061261/4STJysUc/280437.m3u8",logo_url:"https://kurdsport.online/nrt1-sport.png",category:"Kurdish Sports",is_active:true,sort_order:2},
+        {name:"Dasinya Sport",stream_url:"http://m3u.drm-26.com:80/live/Mkdtv1_061261/4STJysUc/689911.m3u8",logo_url:"https://kurdsport.online/dasinyasport.png",category:"Kurdish Sports",is_active:true,sort_order:3},
+        {name:"LD Sport",stream_url:"http://m3u.drm-26.com/live/Mkdtv1_061261/4STJysUc/280502.m3u8",logo_url:"https://kurdsport.online/ldsport.png",category:"Kurdish Sports",is_active:true,sort_order:4},
+        {name:"Duhok Sport",stream_url:"http://m3u.drm-26.com:80/live/Mkdtv1_061261/4STJysUc/689913.m3u8",logo_url:"https://kurdsport.online/duhoksport.png",category:"Kurdish Sports",is_active:true,sort_order:5},
+        {name:"Zaxo Sport",stream_url:"http://m3u.drm-26.com/live/Mkdtv1_061261/4STJysUc/280431.m3u8",logo_url:"https://kurdsport.online/zaxosport.png",category:"Kurdish Sports",is_active:true,sort_order:6},
+        {name:"Astera Sport",stream_url:"http://m3u.drm-26.com:80/live/Mkdtv1_061261/4STJysUc/689910.m3u8",logo_url:"https://kurdsport.online/asterasport1.png",category:"Kurdish Sports",is_active:true,sort_order:7},
+        {name:"Aso Sport",stream_url:"http://m3u.drm-26.com/live/Mkdtv1_061261/4STJysUc/456256.m3u8",logo_url:"https://kurdsport.online/asosport.png",category:"Kurdish Sports",is_active:true,sort_order:8},
+        {name:"Gewher Sport",stream_url:"https://cdn.karwan.tv/gewher-sport/index.m3u8",logo_url:"https://kurdsport.online/gewhersport.png",category:"Kurdish Sports",is_active:true,sort_order:9},
+        {name:"Bein Sport 1",stream_url:"http://xtreamutv.org:80/live/pvVrD1gEuh/Wty1TYowId/110.m3u8",logo_url:"https://kurdsport.online/beinsport1.png",category:"BeIN Sports",is_active:true,sort_order:10},
+        {name:"Bein Sport 2",stream_url:"http://xtreamutv.org:80/live/pvVrD1gEuh/Wty1TYowId/111.m3u8",logo_url:"https://kurdsport.online/beinsport2.png",category:"BeIN Sports",is_active:true,sort_order:11},
+        {name:"Bein Sport 3",stream_url:"http://xtreamutv.org:80/live/pvVrD1gEuh/Wty1TYowId/112.m3u8",logo_url:"https://kurdsport.online/beinsport3.png",category:"BeIN Sports",is_active:true,sort_order:12},
+        {name:"Bein Sport 4",stream_url:"http://xtreamutv.org:80/live/pvVrD1gEuh/Wty1TYowId/113.m3u8",logo_url:"https://kurdsport.online/beinsport4.png",category:"BeIN Sports",is_active:true,sort_order:13},
+        {name:"Bein Sport 5",stream_url:"http://xtreamutv.org:80/live/pvVrD1gEuh/Wty1TYowId/114.m3u8",logo_url:"https://kurdsport.online/beinsport5.png",category:"BeIN Sports",is_active:true,sort_order:14},
+        {name:"Bein Sport 6",stream_url:"http://xtreamutv.org:80/live/pvVrD1gEuh/Wty1TYowId/115.m3u8",logo_url:"https://kurdsport.online/beinsport6.png",category:"BeIN Sports",is_active:true,sort_order:15},
+        {name:"Bein Sport 7",stream_url:"http://xtreamutv.org:80/live/pvVrD1gEuh/Wty1TYowId/116.m3u8",logo_url:"https://kurdsport.online/beinsport7.png",category:"BeIN Sports",is_active:true,sort_order:16},
+        {name:"Bein Sport 8",stream_url:"http://xtreamutv.org:80/live/pvVrD1gEuh/Wty1TYowId/117.m3u8",logo_url:"https://kurdsport.online/beinsport8.png",category:"BeIN Sports",is_active:true,sort_order:17},
+        {name:"Bein Sport 9",stream_url:"http://xtreamutv.org:80/live/pvVrD1gEuh/Wty1TYowId/118.m3u8",logo_url:"https://kurdsport.online/beinsport9.png",category:"BeIN Sports",is_active:true,sort_order:18},
+        {name:"Alwan Sport 1",stream_url:"http://m3u.drm-26.com:80/live/Mkdtv1_061261/4STJysUc/1641618.m3u8",logo_url:"https://kurdsport.online/Alwan-sport.png",category:"Alwan Sports",is_active:true,sort_order:19},
+        {name:"Alwan Sport 2",stream_url:"http://m3u.drm-26.com:80/live/Mkdtv1_061261/4STJysUc/1641619.m3u8",logo_url:"https://kurdsport.online/Alwan-sport.png",category:"Alwan Sports",is_active:true,sort_order:20},
+        {name:"Alwan Sport 3",stream_url:"http://m3u.drm-26.com:80/live/Mkdtv1_061261/4STJysUc/1641620.m3u8",logo_url:"https://kurdsport.online/Alwan-sport.png",category:"Alwan Sports",is_active:true,sort_order:21},
+        {name:"Alwan Sport 4",stream_url:"http://m3u.drm-26.com:80/live/Mkdtv1_061261/4STJysUc/1641621.m3u8",logo_url:"https://kurdsport.online/Alwan-sport.png",category:"Alwan Sports",is_active:true,sort_order:22},
+        {name:"Alwan Sport 5",stream_url:"http://m3u.drm-26.com:80/live/Mkdtv1_061261/4STJysUc/1641622.m3u8",logo_url:"https://kurdsport.online/Alwan-sport.png",category:"Alwan Sports",is_active:true,sort_order:23},
+        {name:"Alwan Sport 6",stream_url:"http://m3u.drm-26.com:80/live/Mkdtv1_061261/4STJysUc/1641623.m3u8",logo_url:"https://kurdsport.online/Alwan-sport.png",category:"Alwan Sports",is_active:true,sort_order:24},
+        {name:"Alwan Sport 7",stream_url:"http://m3u.drm-26.com:80/live/Mkdtv1_061261/4STJysUc/1641611.m3u8",logo_url:"https://kurdsport.online/Alwan-sport.png",category:"Alwan Sports",is_active:true,sort_order:25},
+        {name:"Alwan Sport 8",stream_url:"http://m3u.drm-26.com:80/live/Mkdtv1_061261/4STJysUc/1641612.m3u8",logo_url:"https://kurdsport.online/Alwan-sport.png",category:"Alwan Sports",is_active:true,sort_order:26},
+        {name:"Alwan Sport 9",stream_url:"http://m3u.drm-26.com:80/live/Mkdtv1_061261/4STJysUc/1641613.m3u8",logo_url:"https://kurdsport.online/Alwan-sport.png",category:"Alwan Sports",is_active:true,sort_order:27},
+        {name:"Alwan Sport 10",stream_url:"http://m3u.drm-26.com:80/live/Mkdtv1_061261/4STJysUc/1641614.m3u8",logo_url:"https://kurdsport.online/Alwan-sport.png",category:"Alwan Sports",is_active:true,sort_order:28},
+        {name:"Alwan Sport F1",stream_url:"http://m3u.drm-26.com:80/live/Mkdtv1_061261/4STJysUc/1641616.m3u8",logo_url:"https://kurdsport.online/Alwan-sport.png",category:"Alwan Sports",is_active:true,sort_order:29},
+        {name:"Alwan Sport UFC",stream_url:"http://m3u.drm-26.com:80/live/Mkdtv1_061261/4STJysUc/1641615.m3u8",logo_url:"https://kurdsport.online/Alwan-sport.png",category:"Alwan Sports",is_active:true,sort_order:30},
+        {name:"Alwan Sport WWE",stream_url:"http://m3u.drm-26.com:80/live/Mkdtv1_061261/4STJysUc/1641617.m3u8",logo_url:"https://kurdsport.online/Alwan-sport.png",category:"Alwan Sports",is_active:true,sort_order:31},
+        {name:"AD Sport 1",stream_url:"http://xtreamutv.org:80/live/pvVrD1gEuh/Wty1TYowId/200.m3u8",logo_url:"https://kurdsport.online/abudhabi1.png",category:"Starzplay Sports",is_active:true,sort_order:32},
+        {name:"AD Sport 2",stream_url:"http://xtreamutv.org:80/live/pvVrD1gEuh/Wty1TYowId/201.m3u8",logo_url:"https://kurdsport.online/abudhabi2.png",category:"Starzplay Sports",is_active:true,sort_order:33},
+        {name:"Starzplay Sport 1",stream_url:"http://m3u.drm-26.com/live/Mkdtv1_061261/4STJysUc/1173275.m3u8",logo_url:"https://kurdsport.online/starzsport.png",category:"Starzplay Sports",is_active:true,sort_order:34},
+        {name:"Starzplay Sport 2",stream_url:"http://xtreamutv.org:80/live/pvVrD1gEuh/Wty1TYowId/205.m3u8",logo_url:"https://kurdsport.online/starzsport.png",category:"Starzplay Sports",is_active:true,sort_order:35},
+        {name:"Starzplay Sport 3",stream_url:"http://m3u.drm-26.com/live/Mkdtv1_061261/4STJysUc/252720.m3u8",logo_url:"https://kurdsport.online/starzsport.png",category:"Starzplay Sports",is_active:true,sort_order:36},
+        {name:"ToFi Sport 1",stream_url:"https://cdn.gamhed.online/hls/bein1.m3u8",logo_url:"https://kurdsport.online/tofisports.png",category:"Tofi Sports",is_active:true,sort_order:37},
+        {name:"ToFi Sport 2",stream_url:"https://cdn.gamhed.online/hls/bein2.m3u8",logo_url:"https://kurdsport.online/tofisports.png",category:"Tofi Sports",is_active:true,sort_order:38},
+        {name:"Al Iraqya Sport",stream_url:"http://m3u.drm-26.com:80/live/Mkdtv1_061261/4STJysUc/14284.m3u8",logo_url:"https://kurdsport.online/aliraq.png",category:"Global Sports",is_active:true,sort_order:39},
+        {name:"GEM Sport",stream_url:"https://northtelecom.b-cdn.net/GEMSPORTHD/1_1001_Video.m3u8",logo_url:"https://kurdsport.online/gemsport.png",category:"Global Sports",is_active:true,sort_order:40},
+        {name:"Arda Spor",stream_url:"https://ladyboy.yedektv.cfd//hls/bein1.m3u8",logo_url:"https://kurdsport.online/ardaspor.png",category:"Global Sports",is_active:true,sort_order:41},
+        {name:"TNT Sport",stream_url:"http://195.178.110.110/tntsports/index.m3u8",logo_url:"https://kurdsport.online/tntsport.png",category:"Global Sports",is_active:true,sort_order:42}].forEach(rec => {
+        const ref = db.ref('channels').push();
+        batch[ref.key] = { ...rec, id: ref.key };
+      });
+      db.ref('channels').set(batch);
+    });
+  }
+
+  /* ========== Owner panel UI ========== */
+  const CSS = `
+  .ks-owner-fab{position:fixed;bottom:calc(20px + env(safe-area-inset-bottom,0px));inset-inline-start:calc(20px + env(safe-area-inset-left,0px));z-index:9700;width:50px;height:50px;border-radius:50%;border:1px solid rgba(245,158,11,.4);cursor:pointer;color:#f59e0b;font-size:1rem;background:rgba(245,158,11,.12);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;transition:all .2s}
+  .ks-owner-fab:hover{background:rgba(245,158,11,.25);transform:scale(1.06)}
+  .ks-owner-overlay{position:fixed;inset:0;background:rgba(3,2,8,.7);backdrop-filter:blur(10px);z-index:9800;display:none;align-items:center;justify-content:center;padding:16px}
+  .ks-owner-overlay.show{display:flex}
+  .ks-owner-panel{background:var(--bg-2,#0f0a1e);border:1px solid var(--accent-border,rgba(139,92,246,.28));border-radius:22px;width:100%;max-width:760px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 30px 80px rgba(0,0,0,.6);overflow:hidden}
+  .ks-owner-head{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border,rgba(139,92,246,.16))}
+  .ks-owner-head h2{font-size:1rem;font-weight:800;color:#f59e0b;display:flex;gap:9px;align-items:center;margin:0}
+  .ks-owner-body{padding:18px 20px;overflow-y:auto}
+  .ks-owner-body::-webkit-scrollbar{width:6px}
+  .ks-owner-body::-webkit-scrollbar-thumb{background:var(--border,rgba(139,92,246,.16));border-radius:3px}
+  .ks-in{width:100%;background:var(--input,rgba(255,255,255,.07));border:1px solid var(--border,rgba(139,92,246,.16));border-radius:12px;padding:11px 14px;color:var(--text,#fff);font-size:15px;outline:none;margin-bottom:10px}
+  .ks-in:focus{border-color:var(--accent,#8b5cf6)}
+  .ks-btn{background:linear-gradient(135deg,var(--accent,#8b5cf6),var(--accent-2,#7c3aed));color:#fff;border:none;padding:11px 18px;border-radius:12px;font-weight:700;font-size:.85rem;cursor:pointer;transition:filter .2s}
+  .ks-btn:hover{filter:brightness(1.12)}
+  .ks-btn.sm{padding:6px 12px;font-size:.75rem;border-radius:9px}
+  .ks-btn.danger{background:rgba(239,68,68,.15);color:var(--live,#ef4444);border:1px solid rgba(239,68,68,.35)}
+  .ks-btn.ghost{background:var(--input,rgba(255,255,255,.07));color:var(--text-2,#b6b3c6);border:1px solid var(--border,rgba(139,92,246,.16))}
+  .ks-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  @media(max-width:640px){.ks-row{grid-template-columns:1fr}}
+  .ks-chan{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--border,rgba(139,92,246,.16));border-radius:14px;margin-bottom:8px;background:var(--card,rgba(255,255,255,.045))}
+  .ks-chan img{width:56px;height:32px;object-fit:contain;border-radius:8px;background:rgba(0,0,0,.3);flex-shrink:0}
+  .ks-chan .ks-meta{flex:1;min-width:0}
+  .ks-chan .ks-meta b{font-size:.84rem;color:var(--text,#fff);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ks-chan .ks-meta span{font-size:.72rem;color:var(--text-3,#7d7a92)}
+  .ks-badge{font-size:.62rem;font-weight:800;padding:2px 8px;border-radius:999px}
+  .ks-badge.on{background:rgba(34,197,94,.14);color:#22c55e}
+  .ks-badge.off{background:rgba(239,68,68,.14);color:#ef4444}
+  .ks-msg{font-size:.8rem;margin:8px 0;display:none}
+  .ks-msg.err{display:block;color:var(--live,#ef4444)}
+  .ks-msg.ok{display:block;color:#22c55e}
+  .ks-edit{display:none;margin-top:10px;padding:14px;border:1px dashed var(--accent-border,rgba(139,92,246,.28));border-radius:14px}
+  .ks-edit.show{display:block}
+  .ks-livepill{display:inline-flex;align-items:center;gap:6px;font-size:.72rem;font-weight:700;color:#22c55e}
+  .ks-livepill::before{content:'';width:7px;height:7px;border-radius:50%;background:#22c55e;box-shadow:0 0 8px #22c55e;animation:ksPulse 1.4s infinite}
+  @keyframes ksPulse{50%{opacity:.35}}`;
+  const style = document.createElement('style');
+  style.textContent = CSS;
+  document.head.appendChild(style);
+
+  const fab = document.createElement('button');
+  fab.className = 'ks-owner-fab';
+  fab.title = 'Owner Panel';
+  fab.innerHTML = '<i class="fas fa-user-shield"></i>';
+  document.body.appendChild(fab);
+
+  const overlay = document.createElement('div');
+  overlay.className = 'ks-owner-overlay';
+  overlay.innerHTML = `
+    <div class="ks-owner-panel">
+      <div class="ks-owner-head">
+        <h2><i class="fas fa-crown"></i> Owner Panel</h2>
+        <div style="display:flex;align-items:center;gap:12px">
+          <span class="ks-livepill">LIVE SYNC</span>
+          <button class="ks-btn ghost sm" id="ksClose"><i class="fas fa-times"></i></button>
+        </div>
+      </div>
+      <div class="ks-owner-body" id="ksBody"></div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const body = overlay.querySelector('#ksBody');
+  fab.onclick = () => { overlay.classList.add('show'); render(); };
+  overlay.querySelector('#ksClose').onclick = () => overlay.classList.remove('show');
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.classList.remove('show'); });
+
+  function loginView(msg) {
+    body.innerHTML = `
+      <p style="font-size:.82rem;color:var(--text-3,#7d7a92);margin:0 0 14px">Log in to manage channels. Every change goes live for all visitors instantly.</p>
+      <input class="ks-in" type="email" id="ksEmail" placeholder="Owner email" value="${esc(OWNER_EMAIL)}" autocomplete="username">
+      <input class="ks-in" type="password" id="ksPass" placeholder="Owner password" autocomplete="current-password">
+      <div class="ks-msg" id="ksMsg"></div>
+      <button class="ks-btn" id="ksLogin" style="width:100%"><i class="fas fa-unlock"></i> Log in</button>`;
+    const msgEl = body.querySelector('#ksMsg');
+    if (msg) { msgEl.textContent = msg; msgEl.className = 'ks-msg err'; }
+    const tryLogin = async () => {
+      const btn = body.querySelector('#ksLogin');
+      btn.disabled = true;
+      try {
+        await auth.signInWithEmailAndPassword(body.querySelector('#ksEmail').value.trim(), body.querySelector('#ksPass').value);
+        render();
+      } catch (err) {
+        msgEl.textContent = 'Login failed: ' + (err.message || 'wrong credentials');
+        msgEl.className = 'ks-msg err';
+      }
+      btn.disabled = false;
+    };
+    body.querySelector('#ksLogin').onclick = tryLogin;
+    body.querySelector('#ksPass').addEventListener('keydown', e => { if (e.key === 'Enter') tryLogin(); });
+    body.querySelector('#ksPass').focus();
+  }
+
+  function editForm(ch) {
+    const isNew = !ch;
+    const c = ch || { name: '', stream_url: '', logo_url: '', category: 'Sports', is_active: true, sort_order: 0 };
+    return `
+      <div class="ks-edit show">
+        <div class="ks-row">
+          <input class="ks-in" id="ksName" placeholder="Channel name *" value="${esc(c.name)}">
+          <input class="ks-in" id="ksCat" placeholder="Category (e.g. Kurdish Sports)" value="${esc(c.category)}">
+        </div>
+        <input class="ks-in" id="ksUrl" placeholder="Stream URL (m3u8 / mp4) *" value="${esc(c.stream_url)}">
+        <div class="ks-row">
+          <input class="ks-in" id="ksLogo" placeholder="Logo URL (optional)" value="${esc(c.logo_url)}">
+          <input class="ks-in" id="ksSort" type="number" placeholder="Sort order" value="${c.sort_order}">
+        </div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:.8rem;color:var(--text-2,#b6b3c6);margin-bottom:12px;cursor:pointer">
+          <input type="checkbox" id="ksActive" ${c.is_active ? 'checked' : ''}> Channel is live (visible)
+        </label>
+        <div class="ks-msg" id="ksFormMsg"></div>
+        <div style="display:flex;gap:10px">
+          <button class="ks-btn" id="ksSave"><i class="fas fa-save"></i> ${isNew ? 'Add Channel' : 'Save Changes'}</button>
+          <button class="ks-btn ghost" id="ksCancel">Cancel</button>
+        </div>
+      </div>`;
+  }
+
+  function listView() {
+    db.ref('commands').remove().catch(() => {});
+    const rows = remoteChannels.map(c => `
+      <div class="ks-chan">
+        ${c.logo_url ? `<img src="${esc(c.logo_url)}" onerror="this.style.visibility='hidden'">` : '<div style="width:56px"></div>'}
+        <div class="ks-meta"><b>${esc(c.name)}</b><span>${esc(c.category)} · ${esc(c.stream_url).slice(0, 60)}</span></div>
+        <span class="ks-badge ${c.is_active ? 'on' : 'off'}">${c.is_active ? 'LIVE' : 'OFF'}</span>
+        <button class="ks-btn sm ghost" data-edit="${c.id}"><i class="fas fa-pen"></i></button>
+        <button class="ks-btn sm danger" data-del="${c.id}"><i class="fas fa-trash"></i></button>
+      </div>`).join('');
+
+    body.innerHTML = `
+      <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+        <button class="ks-btn" id="ksAdd"><i class="fas fa-plus"></i> Add Channel</button>
+        <button class="ks-btn ghost" id="ksRefresh" title="Force-reload the website on every visitor's device"><i class="fas fa-tower-broadcast"></i> Refresh All Visitors</button>
+        <button class="ks-btn ghost" id="ksLogout" style="margin-inline-start:auto"><i class="fas fa-right-from-bracket"></i> Log out</button>
+      </div>
+      <div class="ks-msg" id="ksListMsg"></div>
+      <div id="ksFormSlot"></div>
+      <div>${rows || '<p style="color:var(--text-3,#7d7a92);font-size:.82rem">No channels yet — add your first one above.</p>'}</div>`;
+
+    body.querySelector('#ksAdd').onclick = () => {
+      body.querySelector('#ksFormSlot').innerHTML = editForm(null);
+      wireForm(null);
+    };
+    body.querySelector('#ksRefresh').onclick = async () => {
+      const msgEl = body.querySelector('#ksListMsg');
+      try {
+        await db.ref('commands').push({ cmd: 'reload', ts: Date.now() });
+        msgEl.textContent = 'Reload command sent to ALL visitors — every open page refreshes within seconds (yours too).';
+        msgEl.className = 'ks-msg ok';
+      } catch (err) {
+        msgEl.textContent = 'Broadcast failed: ' + err.message; msgEl.className = 'ks-msg err';
+      }
+    };
+    body.querySelector('#ksLogout').onclick = () => auth.signOut().then(render);
+    body.querySelectorAll('[data-edit]').forEach(btn => btn.onclick = () => {
+      const ch = remoteChannels.find(c => c.id == btn.dataset.edit);
+      body.querySelector('#ksFormSlot').innerHTML = editForm(ch);
+      wireForm(ch);
+    });
+    body.querySelectorAll('[data-del]').forEach(btn => btn.onclick = async () => {
+      const ch = remoteChannels.find(c => c.id == btn.dataset.del);
+      if (!confirm(`Delete "${ch.name}"? This removes it live for all visitors.`)) return;
+      const msgEl = body.querySelector('#ksListMsg');
+      try {
+        await db.ref('channels/' + ch.id).remove();
+        msgEl.textContent = 'Channel deleted — syncing to all visitors…'; msgEl.className = 'ks-msg ok';
+      } catch (err) {
+        msgEl.textContent = 'Delete failed: ' + err.message; msgEl.className = 'ks-msg err';
+      }
+    });
+  }
+
+  function wireForm(ch) {
+    const msgEl = body.querySelector('#ksFormMsg');
+    body.querySelector('#ksCancel').onclick = () => { body.querySelector('#ksFormSlot').innerHTML = ''; };
+    body.querySelector('#ksSave').onclick = async () => {
+      const rec = {
+        name: body.querySelector('#ksName').value.trim(),
+        stream_url: body.querySelector('#ksUrl').value.trim(),
+        logo_url: body.querySelector('#ksLogo').value.trim(),
+        category: body.querySelector('#ksCat').value.trim() || 'Sports',
+        is_active: body.querySelector('#ksActive').checked,
+        sort_order: parseInt(body.querySelector('#ksSort').value || '0', 10)
+      };
+      if (!rec.name || !rec.stream_url) {
+        msgEl.textContent = 'Name and Stream URL are required.'; msgEl.className = 'ks-msg err'; return;
+      }
+      const btn = body.querySelector('#ksSave');
+      btn.disabled = true;
+      try {
+        if (ch) {
+          await db.ref('channels/' + ch.id).update(rec);
+        } else {
+          const newRef = db.ref('channels').push();
+          await newRef.set({ ...rec, id: newRef.key });
+        }
+        msgEl.textContent = 'Saved — pushing live to all visitors…'; msgEl.className = 'ks-msg ok';
+        body.querySelector('#ksFormSlot').innerHTML = '';
+      } catch (err) {
+        msgEl.textContent = 'Save failed: ' + err.message; msgEl.className = 'ks-msg err';
+      }
+      btn.disabled = false;
+    };
+  }
+
+  function render() {
+    if (auth.currentUser) listView(); else loginView();
+  }
+  if (auth) auth.onAuthStateChanged(() => { if (overlay.classList.contains('show')) render(); });
+
+  function esc(s) {
+    return String(s ?? '').replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+  }
+
+  window.KSOwner = { getChannels: () => remoteChannels.slice() };
+})();
+
+</script>
+
 </body>
 </html>
