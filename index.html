@@ -4291,6 +4291,46 @@ document.addEventListener('DOMContentLoaded', function(){
     } catch (e) { console.error('refreshHome:', e); }
   }
 
+  /* Rebuild live-view category tabs + channel list (site's renderCategoryTabs is IIFE-local) */
+  function refreshLiveList() {
+    try {
+      if (typeof channels === 'undefined') return;
+      if (typeof window.__ksLiveCat === 'undefined') window.__ksLiveCat = 'All';
+      const cats = ['All', ...new Set(channels.map(c => c.category))];
+      if (!cats.includes(window.__ksLiveCat)) window.__ksLiveCat = 'All';
+      const tabsEl = document.getElementById('categoryTabs');
+      if (tabsEl) {
+        tabsEl.innerHTML = '';
+        cats.forEach(cat => {
+          const btn = document.createElement('button');
+          btn.className = 'cat-tab' + (cat === window.__ksLiveCat ? ' active' : '');
+          btn.textContent = cat;
+          btn.setAttribute('tabindex', '0');
+          btn.onclick = () => { window.__ksLiveCat = cat; refreshLiveList(); };
+          tabsEl.appendChild(btn);
+        });
+      }
+      const listEl = document.getElementById('channelList');
+      if (!listEl) return;
+      listEl.innerHTML = '';
+      const filtered = window.__ksLiveCat === 'All' ? channels : channels.filter(ch => ch.category === window.__ksLiveCat);
+      filtered.forEach(ch => {
+        const idx = channels.indexOf(ch);
+        const item = document.createElement('div');
+        item.className = 'channel-item' + (typeof currentChannelIndex !== 'undefined' && idx === currentChannelIndex ? ' active' : '');
+        const proxyBadge = ch.needsProxy
+          ? '<span class="proxy-badge"><i class="fas fa-bolt"></i> PROXY</span>'
+          : '<span class="verified-badge"><i class="fas fa-check"></i> DIRECT</span>';
+        const logoHtml = ch.logo
+          ? '<img src="' + ch.logo + '" alt="' + ch.name + '" loading="lazy" decoding="async" onerror="this.style.display=\'none\';this.parentElement.innerHTML=\'<span style=font-size:1.3rem;>⚽️</span>\'">'
+          : '<span style="font-size:1.3rem;">⚽️</span>';
+        item.innerHTML = '<div class="ch-number">' + logoHtml + '</div><div class="ch-info"><div class="ch-name-row"><div class="ch-name">' + ch.name + '</div>' + proxyBadge + '</div><div class="ch-category">' + (ch.category || 'Football') + '</div></div><div class="ch-status" id="ch-status-' + idx + '"></div>';
+        item.onclick = () => { if (typeof window.loadChannel === 'function') window.loadChannel(idx); };
+        listEl.appendChild(item);
+      });
+    } catch (e) { console.error('refreshLiveList:', e); }
+  }
+
   function applyRemote(list) {
     remoteChannels = list.slice().sort((a, b) => (a.sort_order - b.sort_order) || String(a.name).localeCompare(b.name));
     if (!KS_CONFIGURED) return;
@@ -4303,8 +4343,7 @@ document.addEventListener('DOMContentLoaded', function(){
         channels = mapped;
         if (typeof currentChannelIndex !== 'undefined' && currentChannelIndex >= channels.length) currentChannelIndex = 0;
         refreshHome();
-        if (typeof renderCategoryTabs === 'function') renderCategoryTabs();
-        if (typeof renderChannels === 'function') renderChannels();
+        refreshLiveList();
         const cnt = document.querySelector('.channel-count');
         if (cnt) cnt.textContent = channels.length;
       }
