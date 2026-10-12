@@ -857,13 +857,13 @@ body{background-attachment:fixed;background-repeat:no-repeat;background-image:ra
                 </div>
             </div>
             <div class="settings-section">
-                <h3><i class="fas fa-gamepad"></i> Controls Guide</h3>
-                <p class="settings-desc">Learn all keyboard, TV remote, gamepad, and touch controls.</p>
-                <button class="settings-btn-primary" onclick="showControlsHelp()" tabindex="0">
-                    <i class="fas fa-gamepad"></i> Open Controls Guide
-                </button>
+                <h3><i class="fas fa-circle-question"></i> Need Help?</h3>
+                <p class="settings-desc">Stream stuck or a channel not working? Try these quick fixes.</p>
+                <div class="input-group">
+                    <button class="settings-btn-primary" onclick="location.reload()" tabindex="0"><i class="fas fa-rotate"></i> Reload Website</button>
+                    <button class="settings-btn-primary" style="background:var(--bg-input); color:var(--text-secondary);" onclick="document.getElementById('settingsPanel').classList.remove('open');document.getElementById('settingsOverlay').classList.remove('show');document.body.style.overflow='';document.getElementById('helpFab').click();" tabindex="0"><i class="fas fa-headset"></i> Report a Problem</button>
+                </div>
             </div>
-            
             <div class="settings-section">
                 <h3><i class="fas fa-moon"></i> Theme Mode</h3>
                 <div class="mode-toggle">
@@ -879,34 +879,6 @@ body{background-attachment:fixed;background-repeat:no-repeat;background-image:ra
                 </div>
             </div>
             <div class="settings-section">
-                <h3><i class="fas fa-play-circle"></i> Playback</h3>
-                <p class="settings-desc">Control how streams start and behave on your device.</p>
-                <div class="input-group" style="gap:14px;">
-                    <label class="checkbox-label" style="padding:10px; background:var(--bg-input); border-radius:10px; border:1px solid var(--border);">
-                        <input type="checkbox" id="settingAutoPlay" onchange="savePlaybackSettings()">
-                        <span><strong>Auto-Play Stream</strong><br><span style="font-size:0.75rem;color:var(--text-muted);">Start live stream automatically when selecting a channel</span></span>
-                    </label>
-                    <label class="checkbox-label" style="padding:10px; background:var(--bg-input); border-radius:10px; border:1px solid var(--border);">
-                        <input type="checkbox" id="settingDataSaver" onchange="savePlaybackSettings()">
-                        <span><strong>Data Saver Mode</strong><br><span style="font-size:0.75rem;color:var(--text-muted);">Limit to 480p max, reduce buffer size for slow WiFi</span></span>
-                    </label>
-                    <label class="checkbox-label" style="padding:10px; background:var(--bg-input); border-radius:10px; border:1px solid var(--border);">
-                        <input type="checkbox" id="settingAlwaysControls" onchange="savePlaybackSettings()">
-                        <span><strong>Always Show Controls</strong><br><span style="font-size:0.75rem;color:var(--text-muted);">Keep player controls visible (good for TV / screen recording)</span></span>
-                    </label>
-                </div>
-            </div>
-            <div class="settings-section">
-                <h3><i class="fas fa-sliders-h"></i> Stream Quality</h3>
-                <p class="settings-desc">Set your preferred default quality. Auto lets the app choose based on your connection.</p>
-                <div class="mode-toggle" id="defaultQualityToggle">
-                    <button class="mode-btn" data-quality="auto" onclick="setDefaultQuality('auto')" tabindex="0">Auto</button>
-                    <button class="mode-btn" data-quality="low" onclick="setDefaultQuality('low')" tabindex="0">Low (360p)</button>
-                    <button class="mode-btn" data-quality="medium" onclick="setDefaultQuality('medium')" tabindex="0">Medium (720p)</button>
-                    <button class="mode-btn" data-quality="high" onclick="setDefaultQuality('high')" tabindex="0">High (1080p)</button>
-                </div>
-            </div>
-            <div class="settings-section">
                 <h3><i class="fas fa-info-circle"></i> About</h3>
                 <div class="help-box">
                     <i class="fas fa-code-branch"></i>
@@ -916,19 +888,8 @@ body{background-attachment:fixed;background-repeat:no-repeat;background-image:ra
                     </div>
                 </div>
             </div>
-                        <!-- Channel Access -->
+                        
             <div class="settings-section">
-                <h3><i class="fas fa-lock"></i> Channel Access</h3>
-                <p class="settings-desc">Channels are locked. Enter the access code to unlock them on this browser.</p>
-                <div class="input-group">
-                    <input type="text" id="settingsAccessCode" class="settings-input" placeholder="Access code" autocomplete="off">
-                    <button class="settings-btn-primary" onclick="unlockFromSettings()"><i class="fas fa-unlock"></i> Unlock Channels</button>
-                    <button class="settings-btn-primary" style="background:var(--bg-input); color:var(--text-secondary);" onclick="lockChannels()"><i class="fas fa-lock"></i> Lock Channels Again</button>
-                </div>
-                <div id="settingsAccessMsg" style="font-size:0.78rem; margin-top:8px; display:none; font-weight:600;"></div>
-            </div>
-
-<div class="settings-section">
                 <h3><i class="fas fa-external-link-alt"></i> Links</h3>
                 <div class="social-links">
                     <a href="https://kurdsport.online/faq.html" target="_blank" class="social-btn email" tabindex="0">
@@ -1905,7 +1866,7 @@ body{background-attachment:fixed;background-repeat:no-repeat;background-image:ra
             abrBandWidthUpFactor: 0.4,
             maxStarvationDelay: 3,
             capLevelToPlayerSize: false,
-            startLevel: 0,
+            startLevel: -1,
             maxBufferHole: 2.0,
             maxSeekHole: 2.0,
             highBufferWatchdogPeriod: 2,
@@ -3494,8 +3455,8 @@ body{background-attachment:fixed;background-repeat:no-repeat;background-image:ra
                 liveDurationInfinity: true,
                 lowLatencyMode: false,
                 capLevelToPlayerSize: true,
-                startLevel: 0,                // FORCE lowest quality immediately
-                abrEwmaDefaultEstimate: 100000,
+                startLevel: -1,               // start at best available quality (auto ABR)
+                abrEwmaDefaultEstimate: 5000000,
                 abrBandWidthFactor: 0.5,
                 abrBandWidthUpFactor: 0.35,
                 backBufferLength: 10,
@@ -4352,25 +4313,40 @@ document.addEventListener('DOMContentLoaded', function(){
   }
   window.applyRemoteChannels = applyRemote;
 
+  // Keep our category filter applied when the site re-renders the list (channel change, next/prev, etc.)
+  if (typeof renderChannels === 'function' && !renderChannels.__ksPatched) {
+    const origRenderChannels = renderChannels;
+    renderChannels = function () { origRenderChannels.apply(this, arguments); refreshLiveList(); };
+    renderChannels.__ksPatched = true;
+  }
+
   if (db) {
     // Live channel add/edit/delete -> all visitors update instantly
     db.ref('channels').on('value', snap => {
       applyRemote(Object.values(snap.val() || {}));
     });
     // Owner "Refresh All Visitors" -> everyone's page reloads (once per tab, loop-proof)
+    let cmdBooted = false;
     db.ref('commands').limitToLast(1).on('value', snap => {
-      const val = snap.val() || {};
-      const key = Object.keys(val)[0];
-      if (!key) return;
-      const c = val[key];
-      if (c.cmd !== 'reload' || !c.ts) return;
-      if ((Date.now() - c.ts) >= 15000) return;
-      if (sessionStorage.getItem('ks_cmd_' + key)) return;
-      sessionStorage.setItem('ks_cmd_' + key, '1');
-      const last = Number(sessionStorage.getItem('ks_last_reload') || 0);
-      if (Date.now() - last < 60000) return;
-      sessionStorage.setItem('ks_last_reload', String(Date.now()));
-      location.reload();
+      try {
+        const val = snap.val() || {};
+        const key = Object.keys(val)[0];
+        if (!key) return;
+        const c = val[key];
+        if (c.cmd !== 'reload' || !c.ts) return;
+        if (!cmdBooted) {   // first event = our own page load: mark seen, never reload
+          cmdBooted = true;
+          localStorage.setItem('ks_seen_cmd', String(c.ts));
+          return;
+        }
+        const seen = Number(localStorage.getItem('ks_seen_cmd') || 0);
+        if (c.ts <= seen) return;   // already handled
+        localStorage.setItem('ks_seen_cmd', String(c.ts));
+        const last = Number(sessionStorage.getItem('ks_last_reload') || 0);
+        if (Date.now() - last < 60000) return;   // safety net: max 1 reload/min/tab
+        sessionStorage.setItem('ks_last_reload', String(Date.now()));
+        location.reload();
+      } catch (e) { /* storage blocked -> stay safe */ }
     });
     // One-time import of your 43 channels (only if database is empty)
     db.ref('channels').once('value', snap => {
@@ -4538,7 +4514,7 @@ document.addEventListener('DOMContentLoaded', function(){
         </label>
         <div class="ks-msg" id="ksFormMsg"></div>
         <div style="display:flex;gap:10px">
-          <button class="ks-btn" id="ksSave"><i class="fas fa-save"></i> ${isNew ? 'Add Channel' : 'Save Changes'}</button>
+          <button class="ks-btn" id="ksSave"><i class="fas fa-save"></i> Save Changes</button>
           <button class="ks-btn ghost" id="ksCancel">Cancel</button>
         </div>
       </div>`;
@@ -4551,24 +4527,18 @@ document.addEventListener('DOMContentLoaded', function(){
         ${c.logo_url ? `<img src="${esc(c.logo_url)}" onerror="this.style.visibility='hidden'">` : '<div style="width:56px"></div>'}
         <div class="ks-meta"><b>${esc(c.name)}</b><span>${esc(c.category)} · ${esc(c.stream_url).slice(0, 60)}</span></div>
         <span class="ks-badge ${c.is_active ? 'on' : 'off'}">${c.is_active ? 'LIVE' : 'OFF'}</span>
-        <button class="ks-btn sm ghost" data-edit="${c.id}"><i class="fas fa-pen"></i></button>
-        <button class="ks-btn sm danger" data-del="${c.id}"><i class="fas fa-trash"></i></button>
+        <button class="ks-btn sm ghost" data-edit="${c.id}" title="Edit channel"><i class="fas fa-pen"></i></button>
       </div>`).join('');
 
     body.innerHTML = `
       <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
-        <button class="ks-btn" id="ksAdd"><i class="fas fa-plus"></i> Add Channel</button>
         <button class="ks-btn ghost" id="ksRefresh" title="Force-reload the website on every visitor's device"><i class="fas fa-tower-broadcast"></i> Refresh All Visitors</button>
         <button class="ks-btn ghost" id="ksLogout" style="margin-inline-start:auto"><i class="fas fa-right-from-bracket"></i> Log out</button>
       </div>
       <div class="ks-msg" id="ksListMsg"></div>
       <div id="ksFormSlot"></div>
-      <div>${rows || '<p style="color:var(--text-3,#7d7a92);font-size:.82rem">No channels yet — add your first one above.</p>'}</div>`;
+      <div>${rows || '<p style="color:var(--text-3,#7d7a92);font-size:.82rem">No channels found.</p>'}</div>`;
 
-    body.querySelector('#ksAdd').onclick = () => {
-      body.querySelector('#ksFormSlot').innerHTML = editForm(null);
-      wireForm(null);
-    };
     body.querySelector('#ksRefresh').onclick = async () => {
       const msgEl = body.querySelector('#ksListMsg');
       try {
@@ -4584,17 +4554,6 @@ document.addEventListener('DOMContentLoaded', function(){
       const ch = remoteChannels.find(c => c.id == btn.dataset.edit);
       body.querySelector('#ksFormSlot').innerHTML = editForm(ch);
       wireForm(ch);
-    });
-    body.querySelectorAll('[data-del]').forEach(btn => btn.onclick = async () => {
-      const ch = remoteChannels.find(c => c.id == btn.dataset.del);
-      if (!confirm(`Delete "${ch.name}"? This removes it live for all visitors.`)) return;
-      const msgEl = body.querySelector('#ksListMsg');
-      try {
-        await db.ref('channels/' + ch.id).remove();
-        msgEl.textContent = 'Channel deleted — syncing to all visitors…'; msgEl.className = 'ks-msg ok';
-      } catch (err) {
-        msgEl.textContent = 'Delete failed: ' + err.message; msgEl.className = 'ks-msg err';
-      }
     });
   }
 
@@ -4616,12 +4575,8 @@ document.addEventListener('DOMContentLoaded', function(){
       const btn = body.querySelector('#ksSave');
       btn.disabled = true;
       try {
-        if (ch) {
-          await db.ref('channels/' + ch.id).update(rec);
-        } else {
-          const newRef = db.ref('channels').push();
-          await newRef.set({ ...rec, id: newRef.key });
-        }
+        if (!ch) throw new Error('Editing only — adding is disabled');
+        await db.ref('channels/' + ch.id).update(rec);
         msgEl.textContent = 'Saved — pushing live to all visitors…'; msgEl.className = 'ks-msg ok';
         body.querySelector('#ksFormSlot').innerHTML = '';
       } catch (err) {
