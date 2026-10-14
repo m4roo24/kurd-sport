@@ -1136,6 +1136,7 @@ body{background-attachment:fixed;background-repeat:no-repeat;background-image:ra
         { name: 'Starzplay Sport 2', url: 'http://xtreamutv.org:80/live/pvVrD1gEuh/Wty1TYowId/205.m3u8', category: 'Starzplay Sports', needsProxy: true, logo: 'https://kurdsport.online/starzsport.png' },
         { name: 'Starzplay Sport 3', url: 'http://m3u.drm-26.com/live/Mkdtv1_061261/4STJysUc/252720.m3u8', category: 'Starzplay Sports', needsProxy: true, logo: 'https://kurdsport.online/starzsport.png' },
         { name: 'Thmanyah Sport 1', url: 'http://m3u.drm-26.com:80/live/Mkdtv1_061261/4STJysUc/1630479.m3u8', category: 'Thmanyah Sports', needsProxy: true, logo: 'https://kurdsport.online/1234.png' },
+        { name: 'Thmanyah Sport 21', url: 'http://m3u.drm-26.com:80/live/Mkdtv1_061261/4STJysUc/1630479.m3u8', category: 'Thmanyah Sports', needsProxy: true, logo: 'https://kurdsport.online/1234.png' },
         { name: 'Thmanyah Sport 2', url: 'http://m3u.drm-26.com:80/live/Mkdtv1_061261/4STJysUc/1549877.m3u8', category: 'Thmanyah Sports', needsProxy: true, logo: 'https://kurdsport.online/1234.png' },
         { name: 'Thmanyah Sport 3', url: 'http://m3u.drm-26.com:80/live/Mkdtv1_061261/4STJysUc/1848332.m3u8', category: 'Thmanyah Sports', needsProxy: true, logo: 'https://kurdsport.online/1234.png' },
         { name: 'Al Iraqya Sport', url: 'http://m3u.drm-26.com:80/live/Mkdtv1_061261/4STJysUc/14284.m3u8', category: 'Global Sports', needsProxy: true, logo: 'https://kurdsport.online/aliraq.png' },
@@ -1381,7 +1382,7 @@ body{background-attachment:fixed;background-repeat:no-repeat;background-image:ra
                 if (currentHls) { try { currentHls.destroy(); } catch(e) {} currentHls = null; }
                 video.removeAttribute('src');
                 tryLoad();
-            }, 15000);
+            }, 60000);
 
             // Watchdog B: mid-playback token expiry -> fresh re-request of original URL
             if (_failoverErrHandler) { video.removeEventListener('error', _failoverErrHandler); }
@@ -2080,7 +2081,7 @@ body{background-attachment:fixed;background-repeat:no-repeat;background-image:ra
                     showError('Stream unavailable. Channel may be offline or your connection is too slow.');
                 }
             }
-        }, 20000);
+        }, 90000);
     }
 
     function showError(msg) {
@@ -3324,7 +3325,7 @@ body{background-attachment:fixed;background-repeat:no-repeat;background-image:ra
     let hls = null;
     let currentUrl = null;
     let retryCount = 0;
-    const MAX_RETRY = 3;
+    const MAX_RETRY = 10;
     let playAttempts = 0;
 
     function supportsNativeHls() {
@@ -3447,7 +3448,7 @@ body{background-attachment:fixed;background-repeat:no-repeat;background-image:ra
                     video.removeEventListener('error', onError);
                     attemptRetry(url);
                 }
-            }, 15000);
+            }, 60000);
 
         } else if (typeof Hls !== 'undefined' && Hls.isSupported()) {
             hls = new Hls({
@@ -3455,25 +3456,25 @@ body{background-attachment:fixed;background-repeat:no-repeat;background-image:ra
                 liveDurationInfinity: true,
                 lowLatencyMode: false,
                 capLevelToPlayerSize: true,
-                startLevel: -1,               // start at best available quality (auto ABR)
-                abrEwmaDefaultEstimate: 5000000,
-                abrBandWidthFactor: 0.5,
-                abrBandWidthUpFactor: 0.35,
-                backBufferLength: 10,
-                maxBufferLength: 6,
-                maxMaxBufferLength: 15,
-                maxBufferSize: 1500 * 1000,
-                liveSyncDurationCount: 1,
-                liveMaxLatencyDurationCount: 3,
-                manifestLoadingTimeOut: 12000,
-                manifestLoadingMaxRetry: 6,
-                levelLoadingTimeOut: 12000,
-                levelLoadingMaxRetry: 6,
-                fragLoadingTimeOut: 18000,
-                fragLoadingMaxRetry: 8,
-                fragLoadingRetryDelay: 800,
-                levelLoadingRetryDelay: 800,
-                manifestLoadingRetryDelay: 800
+                startLevel: 0,                 // start LOWEST quality on slow wifi, upgrade automatically
+                abrEwmaDefaultEstimate: 300000,
+                abrBandWidthFactor: 0.7,
+                abrBandWidthUpFactor: 0.5,
+                backBufferLength: 30,
+                maxBufferLength: 30,
+                maxMaxBufferLength: 120,
+                maxBufferSize: 60 * 1000 * 1000,
+                liveSyncDurationCount: 3,
+                liveMaxLatencyDurationCount: 10,
+                manifestLoadingTimeOut: 30000,
+                manifestLoadingMaxRetry: 12,
+                levelLoadingTimeOut: 30000,
+                levelLoadingMaxRetry: 12,
+                fragLoadingTimeOut: 60000,
+                fragLoadingMaxRetry: 20,
+                fragLoadingRetryDelay: 2000,
+                levelLoadingRetryDelay: 2000,
+                manifestLoadingRetryDelay: 2000
             });
 
             hls.on(Hls.Events.MEDIA_ATTACHED, function() {
@@ -3499,7 +3500,7 @@ body{background-attachment:fixed;background-repeat:no-repeat;background-image:ra
                     if (retryCount < MAX_RETRY) {
                         retryCount++;
                         updateStatus('checking');
-                        setTimeout(function() { hls.startLoad(); }, 1000);
+                        setTimeout(function() { hls.startLoad(); }, 3000);
                     } else {
                         showError('Network error: stream unreachable.');
                     }
@@ -4600,5 +4601,63 @@ document.addEventListener('DOMContentLoaded', function(){
 
 </script>
 
+
+<!-- ===== KIMI FIX: HTML file controls ALL channels (add here = show, delete here = gone everywhere) ===== -->
+<script>
+(function () {
+    var HTML_CHANNELS = null;   // snapshot of channels defined in this HTML file
+
+    function keyOf(c) { return c.url || c.name || ''; }
+
+    function takeSnapshot() {
+        if (HTML_CHANNELS === null && typeof channels !== 'undefined' && channels.length) {
+            HTML_CHANNELS = channels.slice();          // remember exactly what the HTML defines
+        }
+    }
+
+    function enforce() {
+        takeSnapshot();
+        if (HTML_CHANNELS === null || typeof channels === 'undefined') return;
+
+        var allowed = {};
+        HTML_CHANNELS.forEach(function (c) {
+            allowed[keyOf(c)] = true;
+            if (c.name) allowed[c.name] = true;
+        });
+
+        // 1) Remove anything in the live list that is NOT in the HTML file
+        //    (kills Firebase-synced copies & old saved channels you deleted from the code)
+        var removed = 0;
+        for (var i = channels.length - 1; i >= 0; i--) {
+            if (!allowed[keyOf(channels[i])]) {
+                channels.splice(i, 1);
+                removed++;
+            }
+        }
+
+        // 2) Purge deleted channels from browser saved-data (custom channels)
+        try {
+            var saved = JSON.parse(localStorage.getItem('yara_custom_channels') || '[]');
+            var kept = saved.filter(function (c) { return allowed[keyOf(c)] || (c.name && allowed[c.name]); });
+            if (kept.length !== saved.length) {
+                localStorage.setItem('yara_custom_channels', JSON.stringify(kept));
+            }
+        } catch (e) {}
+
+        // 3) Re-render so the page always matches the HTML file
+        try { if (typeof renderChannels === 'function') renderChannels(); } catch (e) {}
+        try { if (typeof renderHomeGrid === 'function') renderHomeGrid(); } catch (e) {}
+    }
+
+    // Enforce immediately, then keep watching for ~5 minutes
+    // (covers slow wifi where Firebase sync arrives late)
+    enforce();
+    var n = 0;
+    var t = setInterval(function () {
+        enforce();
+        if (++n > 60) clearInterval(t);
+    }, 5000);
+})();
+</script>
 </body>
 </html>
