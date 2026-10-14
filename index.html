@@ -430,6 +430,27 @@ body{background-attachment:fixed;background-repeat:no-repeat;background-image:ra
 .settings-section h3 i{font-size:.78rem}
 .settings-btn-primary{font-size:.74rem;padding:9px 13px}
 .settings-btn-primary i{font-size:.78rem}
+
+/* ---- Favorites & Hide ---- */
+.fav-btn{position:absolute;top:12px;inset-inline-start:12px;width:32px;height:32px;border-radius:50%;border:1px solid var(--border);background:var(--card);color:var(--text-3);cursor:pointer;font-size:.85rem;display:flex;align-items:center;justify-content:center;z-index:6;transition:all .2s;padding:0}
+.fav-btn:hover{border-color:rgba(245,158,11,.5);color:#f59e0b}
+.fav-btn.active{color:#f59e0b;border-color:rgba(245,158,11,.5);background:rgba(245,158,11,.14)}
+.fav-star{width:32px;height:32px;border-radius:50%;border:1px solid var(--border);background:var(--card);color:var(--text-3);cursor:pointer;font-size:.85rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .2s;padding:0}
+.fav-star:hover{border-color:rgba(245,158,11,.5);color:#f59e0b}
+.fav-star.active{color:#f59e0b;border-color:rgba(245,158,11,.5);background:rgba(245,158,11,.14)}
+.hide-btn{width:32px;height:32px;border-radius:50%;border:1px solid var(--border);background:var(--card);color:var(--text-3);cursor:pointer;font-size:.8rem;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .2s;padding:0}
+.hide-btn:hover{border-color:rgba(239,68,68,.5);color:#ef4444}
+
+/* ---- Continue Watching ---- */
+#recentStrip{margin:0 0 16px}
+.recent-label{font-size:.8rem;font-weight:800;color:var(--text-2);margin-bottom:8px;display:flex;align-items:center;gap:7px}
+.recent-label i{color:var(--accent)}
+.recent-row{display:flex;gap:10px;overflow-x:auto;padding-bottom:6px;scrollbar-width:none}
+.recent-row::-webkit-scrollbar{display:none}
+.recent-card{flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:6px;width:88px;padding:10px 6px;border-radius:14px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;font-family:inherit;transition:all .2s}
+.recent-card:hover{border-color:var(--accent-border);background:var(--accent-soft);transform:translateY(-2px)}
+.recent-card img{width:46px;height:28px;object-fit:contain;border-radius:6px}
+.recent-card span{font-size:.68rem;font-weight:700;text-align:center;line-height:1.2;word-break:break-word;max-height:2.4em;overflow:hidden}
 </style>
 
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
@@ -727,6 +748,7 @@ body{background-attachment:fixed;background-repeat:no-repeat;background-image:ra
 
     <!-- ================= HOME VIEW (ameditv style) ================= -->
     <div id="homeView">
+        <div id="recentStrip" style="display:none"></div>
         <div class="home-tabs" id="homeCategoryTabs"></div>
         <div class="channel-grid" id="channelGrid"></div>
     </div>
@@ -852,8 +874,23 @@ body{background-attachment:fixed;background-repeat:no-repeat;background-image:ra
                         <option>Football</option><option>Sport</option><option>Custom</option>
                     </select>
                     <label class="checkbox-label"><input type="checkbox" id="customNeedsProxy"> Force proxy (use if stream doesn't load)</label>
-                    <button class="settings-btn-primary" onclick="addCustomChannel()" tabindex="0"><i class="fas fa-plus"></i> Add Channel</button>
+                    <button class="settings-btn-primary" id="customAddBtn" onclick="addCustomChannel()" tabindex="0"><i class="fas fa-plus"></i> Add Channel</button>
                     <div class="custom-channels-list" id="customChannelsList"></div>
+                </div>
+            </div>
+            <div class="settings-section">
+                <h3><i class="fas fa-star" style="color:#f59e0b"></i> My Favorite Channels</h3>
+                <p class="settings-desc">Tap the star on any channel to pin it to the top of the list. Saved on this device only — no one else sees it.</p>
+                <div class="custom-channels-list" id="favoritesList"></div>
+            </div>
+            <div class="settings-section">
+                <h3><i class="fas fa-box-archive"></i> Backup &amp; Restore</h3>
+                <p class="settings-desc">Export your favorites + custom channels as a code, then restore them on any device.</p>
+                <textarea id="backupBox" class="settings-input" rows="3" placeholder="Your backup code appears here — or paste a code and tap Restore" style="resize:vertical;font-size:.72rem;font-family:monospace;"></textarea>
+                <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+                    <button class="settings-btn-primary" onclick="exportBackup()" style="flex:1;min-width:90px;"><i class="fas fa-download"></i> Export</button>
+                    <button class="settings-btn-primary" onclick="copyBackup()" style="flex:1;min-width:90px;background:var(--input);color:var(--text-2);border:1px solid var(--border);"><i class="fas fa-copy"></i> Copy</button>
+                    <button class="settings-btn-primary" onclick="importBackup()" style="flex:1;min-width:90px;"><i class="fas fa-upload"></i> Restore</button>
                 </div>
             </div>
             <div class="settings-section">
@@ -1414,7 +1451,9 @@ body{background-attachment:fixed;background-repeat:no-repeat;background-image:ra
             listEl.innerHTML = '<div style="padding:20px; text-align:center; color:var(--text-muted);">No channels available</div>';
             return;
         }
-        const filtered = activeCategory === "All" ? channels : channels.filter(ch => ch.category === activeCategory);
+        const favSet = getFavs();
+        const filtered = (activeCategory === "All" ? channels.slice() : channels.filter(ch => ch.category === activeCategory))
+            .sort(function(a, b){ return (favSet.includes(b.name) ? 1 : 0) - (favSet.includes(a.name) ? 1 : 0); });
         filtered.forEach((ch) => {
             const idx = channels.indexOf(ch);
             const item = document.createElement('div');
@@ -1423,9 +1462,11 @@ body{background-attachment:fixed;background-repeat:no-repeat;background-image:ra
             item.setAttribute('role', 'button');
             item.onclick = () => loadChannel(idx);
             item.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); loadChannel(idx); } };
-            const proxyBadge = ch.needsProxy ? '<span class="proxy-badge"><i class="fas fa-bolt"></i> PROXY</span>' : '<span class="verified-badge"><i class="fas fa-check"></i> DIRECT</span>';
+            const proxyBadge = '';
             const logoHtml = ch.logo ? '<img src="' + ch.logo + '" alt="' + ch.name + '" style="width:100%;height:100%;object-fit:contain;border-radius:10px;" loading="lazy" decoding="async" onerror="this.style.display=\'none\';this.parentElement.innerHTML=\'<span style=font-size:1.3rem;>⚽️</span>\'">' : '<span style="font-size:1.3rem;">⚽️</span>';
-            item.innerHTML = '<div class="ch-number">' + logoHtml + '</div><div class="ch-info"><div class="ch-name-row"><div class="ch-name">' + ch.name + '</div>' + proxyBadge + '</div><div class="ch-category">' + (ch.category || 'Football') + '</div></div><div class="ch-status" id="ch-status-' + idx + '"></div>';
+            item.innerHTML = '<div class="ch-number">' + logoHtml + '</div><div class="ch-info"><div class="ch-name-row"><div class="ch-name">' + ch.name + '</div>' + proxyBadge + '</div><div class="ch-category">' + (ch.category || 'Football') + '</div></div>' +
+                '<button class="fav-star' + (favSet.includes(ch.name) ? ' active' : '') + '" title="Favorite" onclick="event.stopPropagation();toggleFav(' + JSON.stringify(ch.name).replace(/"/g, '&quot;') + ')"><i class="fas fa-star"></i></button>' +
+                '<div class="ch-status" id="ch-status-' + idx + '"></div>';
             listEl.appendChild(item);
         });
     }
@@ -1573,6 +1614,7 @@ body{background-attachment:fixed;background-repeat:no-repeat;background-image:ra
         currentChannelIndex = index;
         try { localStorage.setItem('kurdSport_lastChannel', JSON.stringify({ idx: index, savedAt: Date.now() })); } catch(e) {}
         const ch = channels[index];
+        try { recordWatch(ch.name); } catch(e) {}
 
         errorOverlay.classList.remove('show');
         errorOverlay.style.display = 'none';
@@ -2191,6 +2233,7 @@ body{background-attachment:fixed;background-repeat:no-repeat;background-image:ra
             settingsOverlay.classList.add('show');
             document.body.style.overflow = 'hidden';
             renderCustomChannels();
+            renderFavSection();
         }
     }
     function closeSettings(e) {
@@ -2271,6 +2314,92 @@ body{background-attachment:fixed;background-repeat:no-repeat;background-image:ra
     }
 
     // ===================== CUSTOM CHANNELS =====================
+    /* ---- Favorites & Hidden (visitor, saved on this device only) ---- */
+    const FAV_KEY = 'yara_favorites';
+    function getFavs(){ try { return JSON.parse(localStorage.getItem(FAV_KEY) || '[]'); } catch(e){ return []; } }
+    function saveFavs(f){ try { localStorage.setItem(FAV_KEY, JSON.stringify(f)); } catch(e){} }
+    function toggleFav(name){
+        let f = getFavs();
+        if (f.includes(name)) f = f.filter(function(x){ return x !== name; });
+        else f.push(name);
+        saveFavs(f);
+        renderFavSection();
+        try { if (typeof controlToast !== 'undefined') controlToast(f.includes(name) ? 'Added to favorites' : 'Removed from favorites'); } catch(e){}
+        try { if (typeof renderChannels === 'function') renderChannels(); } catch(e){}
+        try { if (typeof renderHomeGrid === 'function') renderHomeGrid(); } catch(e){}
+    }
+    function renderFavSection(){
+        const el = document.getElementById('favoritesList');
+        if (!el) return;
+        const f = getFavs();
+        if (!f.length) { el.innerHTML = '<p style="color:var(--text-muted);font-size:0.8rem;text-align:center;padding:8px;">No favorites yet — tap the star on any channel.</p>'; return; }
+        el.innerHTML = f.map(function(name){ return '<div class="custom-channel-item"><span><i class="fas fa-star" style="color:#f59e0b"></i> ' + String(name).replace(/</g, '&lt;') + '</span><button data-favname="' + encodeURIComponent(name) + '" tabindex="0">Remove</button></div>'; }).join('');
+    }
+    document.addEventListener('click', function(e){
+        const btn = e.target && e.target.closest ? e.target.closest('button[data-favname]') : null;
+        if (!btn) return;
+        e.preventDefault();
+        try { toggleFav(decodeURIComponent(btn.getAttribute('data-favname'))); } catch(err) {}
+    });
+    /* ---- Continue Watching (visitor, saved on this device only) ---- */
+    const RECENT_KEY = 'yara_recent';
+    function getRecent(){ try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); } catch(e){ return []; } }
+    function saveRecent(r){ try { localStorage.setItem(RECENT_KEY, JSON.stringify(r.slice(0, 8))); } catch(e){} }
+    function recordWatch(name){
+        let r = getRecent().filter(function(x){ return x !== name; });
+        r.unshift(name);
+        saveRecent(r);
+        renderRecentStrip();
+    }
+    function renderRecentStrip(){
+        const el = document.getElementById('recentStrip');
+        if (!el || typeof channels === 'undefined') return;
+        const r = getRecent();
+        if (!r.length) { el.innerHTML = ''; el.style.display = 'none'; return; }
+        const cards = [];
+        r.forEach(function(name){
+            const idx = channels.findIndex(function(c){ return c.name === name; });
+            if (idx < 0) return;
+            const ch = channels[idx];
+            const logoHtml2 = ch.logo ? '<img src="' + ch.logo + '" loading="lazy" onerror="this.style.display=\'none\'">' : '<span class="grid-emoji">📺</span>';
+            cards.push('<button class="recent-card" onclick="loadChannel(' + idx + ')" title="' + String(name).replace(/"/g, '&quot;') + '">' + logoHtml2 + '<span>' + name + '</span></button>');
+        });
+        if (!cards.length) { el.innerHTML = ''; el.style.display = 'none'; return; }
+        el.style.display = 'block';
+        el.innerHTML = '<div class="recent-label"><i class="fas fa-clock-rotate-left"></i> Continue Watching</div><div class="recent-row">' + cards.join('') + '</div>';
+    }
+    window.addEventListener('ks:channels', function(){ renderRecentStrip(); });
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', renderRecentStrip); else renderRecentStrip();
+    /* ---- Backup & Restore (visitor) ---- */
+    function exportBackup(){
+        const data = { favs: getFavs(), custom: getCustomChannels() };
+        const code = btoa(unescape(encodeURIComponent(JSON.stringify(data))));
+        const el = document.getElementById('backupBox');
+        if (el) el.value = code;
+        if (typeof controlToast !== 'undefined') controlToast('Backup code created — copy it');
+    }
+    function importBackup(){
+        const el = document.getElementById('backupBox');
+        if (!el || !el.value.trim()) { alert('Paste your backup code first'); return; }
+        try {
+            const data = JSON.parse(decodeURIComponent(escape(atob(el.value.trim()))));
+            if (Array.isArray(data.favs)) saveFavs(data.favs);
+            if (Array.isArray(data.custom)) saveCustomChannels(data.custom);
+            renderFavSection(); renderCustomChannels();
+            if (typeof renderChannels === 'function') { try { renderChannels(); } catch(e){} }
+            if (typeof renderHomeGrid === 'function') { try { renderHomeGrid(); } catch(e){} }
+            if (typeof controlToast !== 'undefined') controlToast('Backup restored');
+            alert('Backup restored successfully');
+        } catch(e) { alert('Invalid backup code'); }
+    }
+    function copyBackup(){
+        const el = document.getElementById('backupBox');
+        if (!el) return;
+        if (!el.value.trim()) exportBackup();
+        el.select();
+        try { document.execCommand('copy'); if (typeof controlToast !== 'undefined') controlToast('Backup code copied'); }
+        catch(e) { if (navigator.clipboard) navigator.clipboard.writeText(el.value); }
+    }
     function getCustomChannels() {
         try { const data = localStorage.getItem('yara_custom_channels'); return data ? JSON.parse(data) : []; }
         catch(e) { return []; }
@@ -2291,7 +2420,15 @@ body{background-attachment:fixed;background-repeat:no-repeat;background-image:ra
         if (!/^https?:\/\/.+/i.test(url)) { alert('Please enter a valid stream URL (must start with http:// or https://).'); return; }
         if (!logo) logo = DEFAULT_CHANNEL_LOGO;
         const custom = getCustomChannels();
-        custom.push({ name, url, category, needsProxy, logo, id: Date.now() });
+        if (ksEditingCustomId) {
+            const idx = custom.findIndex(function(c){ return c.id === ksEditingCustomId; });
+            if (idx > -1) custom[idx] = { name, url, category, needsProxy, logo, id: custom[idx].id };
+            ksEditingCustomId = null;
+            const __btn = document.getElementById('customAddBtn');
+            if (__btn) __btn.innerHTML = '<i class="fas fa-plus"></i> Add Channel';
+        } else {
+            custom.push({ name, url, category, needsProxy, logo, id: Date.now() });
+        }
         saveCustomChannels(custom);
         document.getElementById('customChannelName').value = '';
         document.getElementById('customM3U8').value = '';
@@ -2313,11 +2450,27 @@ body{background-attachment:fixed;background-repeat:no-repeat;background-image:ra
         renderChannels();
         document.getElementById('channelCount').textContent = channels.length;
     }
+    let ksEditingCustomId = null;
+    function editCustomChannel(id) {
+        const custom = getCustomChannels();
+        const c = custom.find(x => x.id === id);
+        if (!c) return;
+        const btn = document.getElementById('customAddBtn');
+        if (ksEditingCustomId === id) { ksEditingCustomId = null; if (btn) btn.innerHTML = '<i class="fas fa-plus"></i> Add Channel'; return; }
+        document.getElementById('customChannelName').value = c.name;
+        document.getElementById('customM3U8').value = c.url;
+        document.getElementById('customCategory').value = c.category || 'Sports';
+        document.getElementById('customNeedsProxy').checked = !!c.needsProxy;
+        const logoEl = document.getElementById('customChannelLogo');
+        if (logoEl) logoEl.value = c.logo || '';
+        ksEditingCustomId = id;
+        if (btn) btn.innerHTML = '<i class="fas fa-save"></i> Save Changes';
+    }
     function renderCustomChannels() {
         const list = document.getElementById('customChannelsList');
         const custom = getCustomChannels();
         if (custom.length === 0) { list.innerHTML = '<p style="color:var(--text-muted); font-size:0.8rem; text-align:center; padding:8px;">No custom channels yet.</p>'; return; }
-        list.innerHTML = custom.map(c => '<div class="custom-channel-item"><span>' + c.name + '</span><button onclick="removeCustomChannel(' + c.id + ')" tabindex="0">Remove</button></div>').join('');
+        list.innerHTML = custom.map(c => '<div class="custom-channel-item"><span>' + c.name + '</span><span style="display:flex;gap:6px;"><button onclick="editCustomChannel(' + c.id + ')" tabindex="0" style="background:var(--accent-soft);color:var(--primary-light);border:1px solid var(--accent-border);">Edit</button><button onclick="removeCustomChannel(' + c.id + ')" tabindex="0">Remove</button></span></div>').join('');
     }
     function mergeCustomChannels() {
         try {
@@ -3693,7 +3846,9 @@ body{background-attachment:fixed;background-repeat:no-repeat;background-image:ra
             const grid = document.getElementById('channelGrid');
             if (!grid || typeof channels === 'undefined') return;
             grid.innerHTML = '';
-            const filtered = homeCategory === 'All' ? channels : channels.filter(ch => ch.category === homeCategory);
+            const __favSet = getFavs();
+            const filtered = (homeCategory === 'All' ? channels.slice() : channels.filter(ch => ch.category === homeCategory))
+                .sort(function(a, b){ return (__favSet.includes(b.name) ? 1 : 0) - (__favSet.includes(a.name) ? 1 : 0); });
             filtered.forEach((ch) => {
                 const idx = channels.indexOf(ch);
                 const card = document.createElement('div');
@@ -3703,7 +3858,7 @@ body{background-attachment:fixed;background-repeat:no-repeat;background-image:ra
                 const logoHtml = ch.logo
                     ? '<img src="' + ch.logo + '" alt="' + ch.name + '" loading="lazy" decoding="async" onerror="this.style.display=\'none\';this.parentElement.innerHTML=\'<span class=grid-emoji>⚽️</span>\'">'
                     : '<span class="grid-emoji">⚽️</span>';
-                card.innerHTML = '<div class="grid-icon">' + logoHtml + '</div><div class="grid-name">' + ch.name + '</div>';
+                card.innerHTML = '<button class="fav-btn' + (__favSet.includes(ch.name) ? ' active' : '') + '" title="Favorite" onclick="event.stopPropagation();toggleFav(' + JSON.stringify(ch.name).replace(/"/g, '&quot;') + ')"><i class="fas fa-star"></i></button>' + '<div class="grid-icon">' + logoHtml + '</div><div class="grid-name">' + ch.name + '</div>';
                 card.onclick = () => loadChannel(idx);
                 card.onkeydown = (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); loadChannel(idx); } };
                 grid.appendChild(card);
@@ -4236,7 +4391,9 @@ document.addEventListener('DOMContentLoaded', function(){
       const grid = document.getElementById('channelGrid');
       if (!grid) return;
       grid.innerHTML = '';
-      const filtered = window.__ksHomeCat === 'All' ? channels : channels.filter(ch => ch.category === window.__ksHomeCat);
+      const __favSet = getFavs();
+      const filtered = (window.__ksHomeCat === 'All' ? channels.slice() : channels.filter(ch => ch.category === window.__ksHomeCat))
+        .sort(function(a, b){ return (__favSet.includes(b.name) ? 1 : 0) - (__favSet.includes(a.name) ? 1 : 0); });
       filtered.forEach(ch => {
         const idx = channels.indexOf(ch);
         const card = document.createElement('div');
@@ -4246,7 +4403,7 @@ document.addEventListener('DOMContentLoaded', function(){
         const logoHtml = ch.logo
           ? '<img src="' + ch.logo + '" alt="' + ch.name + '" loading="lazy" decoding="async" onerror="this.style.display=\'none\';this.parentElement.innerHTML=\'<span class=grid-emoji>⚽️</span>\'">'
           : '<span class="grid-emoji">⚽️</span>';
-        card.innerHTML = '<div class="grid-icon">' + logoHtml + '</div><div class="grid-name">' + ch.name + '</div>';
+        card.innerHTML = '<button class="fav-btn' + (__favSet.includes(ch.name) ? ' active' : '') + '" title="Favorite" onclick="event.stopPropagation();toggleFav(' + JSON.stringify(ch.name).replace(/"/g, '&quot;') + ')"><i class="fas fa-star"></i></button>' + '<div class="grid-icon">' + logoHtml + '</div><div class="grid-name">' + ch.name + '</div>';
         card.onclick = () => { if (typeof window.loadChannel === 'function') window.loadChannel(idx); };
         grid.appendChild(card);
       });
@@ -4275,42 +4432,133 @@ document.addEventListener('DOMContentLoaded', function(){
       const listEl = document.getElementById('channelList');
       if (!listEl) return;
       listEl.innerHTML = '';
-      const filtered = window.__ksLiveCat === 'All' ? channels : channels.filter(ch => ch.category === window.__ksLiveCat);
+      const favSet = getFavs();
+      const filtered = (window.__ksLiveCat === 'All' ? channels.slice() : channels.filter(ch => ch.category === window.__ksLiveCat))
+        .sort(function(a, b){ return (favSet.includes(b.name) ? 1 : 0) - (favSet.includes(a.name) ? 1 : 0); });
       filtered.forEach(ch => {
         const idx = channels.indexOf(ch);
         const item = document.createElement('div');
         item.className = 'channel-item' + (typeof currentChannelIndex !== 'undefined' && idx === currentChannelIndex ? ' active' : '');
-        const proxyBadge = ch.needsProxy
-          ? '<span class="proxy-badge"><i class="fas fa-bolt"></i> PROXY</span>'
-          : '<span class="verified-badge"><i class="fas fa-check"></i> DIRECT</span>';
+        const proxyBadge = '';
         const logoHtml = ch.logo
           ? '<img src="' + ch.logo + '" alt="' + ch.name + '" loading="lazy" decoding="async" onerror="this.style.display=\'none\';this.parentElement.innerHTML=\'<span style=font-size:1.3rem;>⚽️</span>\'">'
           : '<span style="font-size:1.3rem;">⚽️</span>';
-        item.innerHTML = '<div class="ch-number">' + logoHtml + '</div><div class="ch-info"><div class="ch-name-row"><div class="ch-name">' + ch.name + '</div>' + proxyBadge + '</div><div class="ch-category">' + (ch.category || 'Football') + '</div></div><div class="ch-status" id="ch-status-' + idx + '"></div>';
+        item.innerHTML = '<div class="ch-number">' + logoHtml + '</div><div class="ch-info"><div class="ch-name-row"><div class="ch-name">' + ch.name + '</div>' + proxyBadge + '</div><div class="ch-category">' + (ch.category || 'Football') + '</div></div>' +
+                '<button class="fav-star' + (favSet.includes(ch.name) ? ' active' : '') + '" title="Favorite" onclick="event.stopPropagation();toggleFav(' + JSON.stringify(ch.name).replace(/"/g, '&quot;') + ')"><i class="fas fa-star"></i></button>' +
+                '<div class="ch-status" id="ch-status-' + idx + '"></div>';
         item.onclick = () => { if (typeof window.loadChannel === 'function') window.loadChannel(idx); };
         listEl.appendChild(item);
       });
     } catch (e) { console.error('refreshLiveList:', e); }
   }
 
-  function applyRemote(list) {
-    remoteChannels = list.slice().sort((a, b) => (a.sort_order - b.sort_order) || String(a.name).localeCompare(b.name));
-    if (!KS_CONFIGURED) return;
-    const mapped = remoteChannels.filter(c => c.is_active).map(c => ({
-      name: c.name, url: c.stream_url, logo: c.logo_url || '',
-      category: c.category || 'Sports', needsProxy: true
-    }));
+    /* ---- HTML <-> Owner Panel two-way merge (replaces old applyRemote) ---- */
+  const KS_HTML_CHANNELS = (typeof channels !== 'undefined') ? JSON.parse(JSON.stringify(channels)) : [];
+  let ksDeleted = {};
+  let ksWriting = false;
+
+  function ksKey(name){ return String(name||'').toLowerCase().replace(/\s+/g,' ').trim(); }
+  function ksSafe(k){ return k.replace(/[.#$[\]]/g,'_'); }
+
+  function ksBuildMerged(){
+    const map = new Map();
+    // 1) base layer: channels hard-coded in THIS html file
+    KS_HTML_CHANNELS.forEach(function(c){
+      const k = ksKey(c.name);
+      if (ksDeleted[ksSafe(k)]) return;
+      map.set(k, { name:c.name, url:c.url, logo:c.logo||'', category:c.category||'Sports', needsProxy:!!c.needsProxy });
+    });
+    // 2) overlay: channels from Firebase (owner panel adds/edits win)
+    remoteChannels.slice().sort(function(a,b){ return (a.sort_order-b.sort_order) || String(a.name).localeCompare(b.name); })
+      .forEach(function(c){
+        if (!c.is_active) return;
+        const k = ksKey(c.name);
+        if (ksDeleted[ksSafe(k)]) return;
+        map.set(k, { name:c.name, url:c.stream_url, logo:c.logo_url||'', category:c.category||'Sports', needsProxy:true });
+      });
+    return Array.from(map.values());
+  }
+
+  function ksRender(list){
     try {
-      if (typeof channels !== 'undefined') {
-        channels = mapped;
-        if (typeof currentChannelIndex !== 'undefined' && currentChannelIndex >= channels.length) currentChannelIndex = 0;
-        refreshHome();
-        refreshLiveList();
-        const cnt = document.querySelector('.channel-count');
-        if (cnt) cnt.textContent = channels.length;
-      }
-    } catch (e) { console.error('applyRemote:', e); }
+      channels = list;
+      if (typeof currentChannelIndex !== 'undefined' && currentChannelIndex >= channels.length) currentChannelIndex = 0;
+      if (typeof refreshHome === 'function') refreshHome();
+      if (typeof refreshLiveList === 'function') refreshLiveList();
+      const cnt = document.querySelector('.channel-count');
+      if (cnt) cnt.textContent = channels.length;
+    } catch(e){ console.error('ksRender:', e); }
     window.dispatchEvent(new CustomEvent('ks:channels', { detail: remoteChannels }));
+  }
+
+  function ksReconcile(){
+    if (!KS_CONFIGURED || !db || ksWriting) return;
+    try {
+      const htmlKeys = new Set(KS_HTML_CHANNELS.map(function(c){ return ksKey(c.name); }));
+      const remoteByName = {};
+      remoteChannels.forEach(function(c){ remoteByName[ksKey(c.name)] = c; });
+      let changed = false;
+      const updates = {};
+      const tasks = [];
+
+      // A) HTML channels missing/outdated in Firebase -> write them (they appear in the Owner Panel)
+      KS_HTML_CHANNELS.forEach(function(c,i){
+        const k = ksKey(c.name), r = remoteByName[k];
+        if (!r || r.source !== 'html' || r.stream_url !== c.url ||
+            (r.logo_url||'') !== (c.logo||'') || (r.category||'') !== (c.category||'')){
+          var keepOrder = (r && typeof r.sort_order === 'number') ? r.sort_order : i;
+          updates['channels/' + ksSafe(k)] = { id:ksSafe(k), name:c.name, stream_url:c.url,
+            logo_url:c.logo||'', category:c.category||'Sports', is_active:(r && r.is_active === false) ? false : true, sort_order:keepOrder, source:'html' };
+          changed = true;
+        }
+      });
+
+      // B) Cleanup: make Firebase match the HTML file
+      remoteChannels.forEach(function(c){
+        const k = ksKey(c.name);
+        if (!c.source && htmlKeys.has(k) && ksSafe(k) !== c.id){
+          tasks.push(db.ref('channels/' + c.id).remove()); changed = true;              // old duplicate record -> replaced
+        } else if (c.source === 'html' && !htmlKeys.has(k)){
+          tasks.push(db.ref('channels/' + c.id).remove());                              // deleted from HTML file -> delete everywhere
+          tasks.push(db.ref('deleted_channels/' + c.id).set(Date.now()));               // tombstone -> gone on all devices
+          changed = true;
+        } else if (c.source === 'html' && c.is_active === false){
+          tasks.push(db.ref('deleted_channels/' + c.id).set(Date.now()));               // owner turned it OFF -> hide everywhere
+          changed = true;
+        } else if (c.source === 'html' && c.is_active !== false && ksDeleted[k]){
+          tasks.push(db.ref('deleted_channels/' + c.id).remove());                      // owner turned it back ON
+          changed = true;
+        }
+      });
+
+      if (changed){
+        ksWriting = true;
+        if (Object.keys(updates).length) tasks.push(db.ref().update(updates));
+        Promise.all(tasks).catch(function(){}).then(function(){ ksWriting = false; });
+      }
+    } catch(e){ console.error('ksReconcile:', e); }
+  }
+
+  function ksApply(){
+    ksRender(ksBuildMerged());
+    ksReconcile();
+  }
+
+  function applyRemote(list) {
+    remoteChannels = list.slice().sort(function(a,b){ return (a.sort_order - b.sort_order) || String(a.name).localeCompare(b.name); });
+    if (!KS_CONFIGURED) return;
+    ksApply();
+  }
+  function ksShowAnnounce(msg){
+    try {
+      var box = document.createElement('div');
+      box.style.cssText = 'position:fixed;top:calc(74px + env(safe-area-inset-top,0px));inset-inline-start:50%;transform:translateX(-50%);z-index:12000;max-width:92vw;background:var(--bg-2,#0f0a1e);border:1px solid var(--accent-border,rgba(139,92,246,.45));border-radius:16px;padding:14px 18px;display:flex;align-items:center;gap:10px;box-shadow:0 14px 44px rgba(0,0,0,.55);font-size:.88rem;font-weight:600;color:var(--text,#fff);cursor:pointer;font-family:inherit;';
+      box.innerHTML = '<i class="fas fa-bullhorn" style="color:var(--accent,#8b5cf6);flex-shrink:0"></i><span style="flex:1;min-width:0">' + String(msg).replace(/</g, '&lt;') + '</span><i class="fas fa-xmark" style="color:var(--text-3);flex-shrink:0"></i>';
+      document.body.appendChild(box);
+      var kill = function(){ if (box.parentNode) box.parentNode.removeChild(box); };
+      box.onclick = kill;
+      setTimeout(kill, 12000);
+    } catch(e){}
   }
   window.applyRemoteChannels = applyRemote;
 
@@ -4326,6 +4574,12 @@ document.addEventListener('DOMContentLoaded', function(){
     db.ref('channels').on('value', snap => {
       applyRemote(Object.values(snap.val() || {}));
     });
+    // Deleted channels (tombstones) -> apply on every device
+    db.ref('deleted_channels').on('value', function(snap){
+      ksDeleted = snap.val() || {};
+      if (typeof ksApply === 'function') ksApply();
+    });
+
     // Owner "Refresh All Visitors" -> everyone's page reloads (once per tab, loop-proof)
     let cmdBooted = false;
     db.ref('commands').limitToLast(1).on('value', snap => {
@@ -4334,6 +4588,11 @@ document.addEventListener('DOMContentLoaded', function(){
         const key = Object.keys(val)[0];
         if (!key) return;
         const c = val[key];
+        if (c && c.cmd === 'announce' && c.msg) {
+          const seenA = Number(localStorage.getItem('ks_seen_cmd') || 0);
+          if (c.ts > seenA) { try { ksShowAnnounce(c.msg); } catch(e){} }
+          return;
+        }
         if (c.cmd !== 'reload' || !c.ts) return;
         if (!cmdBooted) {   // first event = our own page load: mark seen, never reload
           cmdBooted = true;
@@ -4349,58 +4608,7 @@ document.addEventListener('DOMContentLoaded', function(){
         location.reload();
       } catch (e) { /* storage blocked -> stay safe */ }
     });
-    // One-time import of your 43 channels (only if database is empty)
-    db.ref('channels').once('value', snap => {
-      if (snap.exists()) return;
-      const batch = {};
-      [{name:"Biner TV",stream_url:"https://lbgo.bozztv.com/ssh101/live/biner-zaxo/playlist.m3u8",logo_url:"https://kurdsport.online/binertv.png",category:"Kurdish Sports",is_active:true,sort_order:0},
-        {name:"AVA Sport",stream_url:"http://avrstream.com:1935/live/AvaSport/tracks-v1a1/mono.m3u8",logo_url:"https://kurdsport.online/ava-sport.png",category:"Kurdish Sports",is_active:true,sort_order:1},
-        {name:"NRT Sport",stream_url:"http://m3u.drm-26.com/live/Mkdtv1_061261/4STJysUc/280437.m3u8",logo_url:"https://kurdsport.online/nrt1-sport.png",category:"Kurdish Sports",is_active:true,sort_order:2},
-        {name:"Dasinya Sport",stream_url:"http://m3u.drm-26.com:80/live/Mkdtv1_061261/4STJysUc/689911.m3u8",logo_url:"https://kurdsport.online/dasinyasport.png",category:"Kurdish Sports",is_active:true,sort_order:3},
-        {name:"LD Sport",stream_url:"http://m3u.drm-26.com/live/Mkdtv1_061261/4STJysUc/280502.m3u8",logo_url:"https://kurdsport.online/ldsport.png",category:"Kurdish Sports",is_active:true,sort_order:4},
-        {name:"Duhok Sport",stream_url:"http://m3u.drm-26.com:80/live/Mkdtv1_061261/4STJysUc/689913.m3u8",logo_url:"https://kurdsport.online/duhoksport.png",category:"Kurdish Sports",is_active:true,sort_order:5},
-        {name:"Zaxo Sport",stream_url:"http://m3u.drm-26.com/live/Mkdtv1_061261/4STJysUc/280431.m3u8",logo_url:"https://kurdsport.online/zaxosport.png",category:"Kurdish Sports",is_active:true,sort_order:6},
-        {name:"Astera Sport",stream_url:"http://m3u.drm-26.com:80/live/Mkdtv1_061261/4STJysUc/689910.m3u8",logo_url:"https://kurdsport.online/asterasport1.png",category:"Kurdish Sports",is_active:true,sort_order:7},
-        {name:"Aso Sport",stream_url:"http://m3u.drm-26.com/live/Mkdtv1_061261/4STJysUc/456256.m3u8",logo_url:"https://kurdsport.online/asosport.png",category:"Kurdish Sports",is_active:true,sort_order:8},
-        {name:"Gewher Sport",stream_url:"https://cdn.karwan.tv/gewher-sport/index.m3u8",logo_url:"https://kurdsport.online/gewhersport.png",category:"Kurdish Sports",is_active:true,sort_order:9},
-        {name:"Bein Sport 1",stream_url:"http://xtreamutv.org:80/live/pvVrD1gEuh/Wty1TYowId/110.m3u8",logo_url:"https://kurdsport.online/beinsport1.png",category:"BeIN Sports",is_active:true,sort_order:10},
-        {name:"Bein Sport 2",stream_url:"http://xtreamutv.org:80/live/pvVrD1gEuh/Wty1TYowId/111.m3u8",logo_url:"https://kurdsport.online/beinsport2.png",category:"BeIN Sports",is_active:true,sort_order:11},
-        {name:"Bein Sport 3",stream_url:"http://xtreamutv.org:80/live/pvVrD1gEuh/Wty1TYowId/112.m3u8",logo_url:"https://kurdsport.online/beinsport3.png",category:"BeIN Sports",is_active:true,sort_order:12},
-        {name:"Bein Sport 4",stream_url:"http://xtreamutv.org:80/live/pvVrD1gEuh/Wty1TYowId/113.m3u8",logo_url:"https://kurdsport.online/beinsport4.png",category:"BeIN Sports",is_active:true,sort_order:13},
-        {name:"Bein Sport 5",stream_url:"http://xtreamutv.org:80/live/pvVrD1gEuh/Wty1TYowId/114.m3u8",logo_url:"https://kurdsport.online/beinsport5.png",category:"BeIN Sports",is_active:true,sort_order:14},
-        {name:"Bein Sport 6",stream_url:"http://xtreamutv.org:80/live/pvVrD1gEuh/Wty1TYowId/115.m3u8",logo_url:"https://kurdsport.online/beinsport6.png",category:"BeIN Sports",is_active:true,sort_order:15},
-        {name:"Bein Sport 7",stream_url:"http://xtreamutv.org:80/live/pvVrD1gEuh/Wty1TYowId/116.m3u8",logo_url:"https://kurdsport.online/beinsport7.png",category:"BeIN Sports",is_active:true,sort_order:16},
-        {name:"Bein Sport 8",stream_url:"http://xtreamutv.org:80/live/pvVrD1gEuh/Wty1TYowId/117.m3u8",logo_url:"https://kurdsport.online/beinsport8.png",category:"BeIN Sports",is_active:true,sort_order:17},
-        {name:"Bein Sport 9",stream_url:"http://xtreamutv.org:80/live/pvVrD1gEuh/Wty1TYowId/118.m3u8",logo_url:"https://kurdsport.online/beinsport9.png",category:"BeIN Sports",is_active:true,sort_order:18},
-        {name:"Alwan Sport 1",stream_url:"http://m3u.drm-26.com:80/live/Mkdtv1_061261/4STJysUc/1641618.m3u8",logo_url:"https://kurdsport.online/Alwan-sport.png",category:"Alwan Sports",is_active:true,sort_order:19},
-        {name:"Alwan Sport 2",stream_url:"http://m3u.drm-26.com:80/live/Mkdtv1_061261/4STJysUc/1641619.m3u8",logo_url:"https://kurdsport.online/Alwan-sport.png",category:"Alwan Sports",is_active:true,sort_order:20},
-        {name:"Alwan Sport 3",stream_url:"http://m3u.drm-26.com:80/live/Mkdtv1_061261/4STJysUc/1641620.m3u8",logo_url:"https://kurdsport.online/Alwan-sport.png",category:"Alwan Sports",is_active:true,sort_order:21},
-        {name:"Alwan Sport 4",stream_url:"http://m3u.drm-26.com:80/live/Mkdtv1_061261/4STJysUc/1641621.m3u8",logo_url:"https://kurdsport.online/Alwan-sport.png",category:"Alwan Sports",is_active:true,sort_order:22},
-        {name:"Alwan Sport 5",stream_url:"http://m3u.drm-26.com:80/live/Mkdtv1_061261/4STJysUc/1641622.m3u8",logo_url:"https://kurdsport.online/Alwan-sport.png",category:"Alwan Sports",is_active:true,sort_order:23},
-        {name:"Alwan Sport 6",stream_url:"http://m3u.drm-26.com:80/live/Mkdtv1_061261/4STJysUc/1641623.m3u8",logo_url:"https://kurdsport.online/Alwan-sport.png",category:"Alwan Sports",is_active:true,sort_order:24},
-        {name:"Alwan Sport 7",stream_url:"http://m3u.drm-26.com:80/live/Mkdtv1_061261/4STJysUc/1641611.m3u8",logo_url:"https://kurdsport.online/Alwan-sport.png",category:"Alwan Sports",is_active:true,sort_order:25},
-        {name:"Alwan Sport 8",stream_url:"http://m3u.drm-26.com:80/live/Mkdtv1_061261/4STJysUc/1641612.m3u8",logo_url:"https://kurdsport.online/Alwan-sport.png",category:"Alwan Sports",is_active:true,sort_order:26},
-        {name:"Alwan Sport 9",stream_url:"http://m3u.drm-26.com:80/live/Mkdtv1_061261/4STJysUc/1641613.m3u8",logo_url:"https://kurdsport.online/Alwan-sport.png",category:"Alwan Sports",is_active:true,sort_order:27},
-        {name:"Alwan Sport 10",stream_url:"http://m3u.drm-26.com:80/live/Mkdtv1_061261/4STJysUc/1641614.m3u8",logo_url:"https://kurdsport.online/Alwan-sport.png",category:"Alwan Sports",is_active:true,sort_order:28},
-        {name:"Alwan Sport F1",stream_url:"http://m3u.drm-26.com:80/live/Mkdtv1_061261/4STJysUc/1641616.m3u8",logo_url:"https://kurdsport.online/Alwan-sport.png",category:"Alwan Sports",is_active:true,sort_order:29},
-        {name:"Alwan Sport UFC",stream_url:"http://m3u.drm-26.com:80/live/Mkdtv1_061261/4STJysUc/1641615.m3u8",logo_url:"https://kurdsport.online/Alwan-sport.png",category:"Alwan Sports",is_active:true,sort_order:30},
-        {name:"Alwan Sport WWE",stream_url:"http://m3u.drm-26.com:80/live/Mkdtv1_061261/4STJysUc/1641617.m3u8",logo_url:"https://kurdsport.online/Alwan-sport.png",category:"Alwan Sports",is_active:true,sort_order:31},
-        {name:"AD Sport 1",stream_url:"http://xtreamutv.org:80/live/pvVrD1gEuh/Wty1TYowId/200.m3u8",logo_url:"https://kurdsport.online/abudhabi1.png",category:"Starzplay Sports",is_active:true,sort_order:32},
-        {name:"AD Sport 2",stream_url:"http://xtreamutv.org:80/live/pvVrD1gEuh/Wty1TYowId/201.m3u8",logo_url:"https://kurdsport.online/abudhabi2.png",category:"Starzplay Sports",is_active:true,sort_order:33},
-        {name:"Starzplay Sport 1",stream_url:"http://m3u.drm-26.com/live/Mkdtv1_061261/4STJysUc/1173275.m3u8",logo_url:"https://kurdsport.online/starzsport.png",category:"Starzplay Sports",is_active:true,sort_order:34},
-        {name:"Starzplay Sport 2",stream_url:"http://xtreamutv.org:80/live/pvVrD1gEuh/Wty1TYowId/205.m3u8",logo_url:"https://kurdsport.online/starzsport.png",category:"Starzplay Sports",is_active:true,sort_order:35},
-        {name:"Starzplay Sport 3",stream_url:"http://m3u.drm-26.com/live/Mkdtv1_061261/4STJysUc/252720.m3u8",logo_url:"https://kurdsport.online/starzsport.png",category:"Starzplay Sports",is_active:true,sort_order:36},
-        {name:"ToFi Sport 1",stream_url:"https://cdn.gamhed.online/hls/bein1.m3u8",logo_url:"https://kurdsport.online/tofisports.png",category:"Tofi Sports",is_active:true,sort_order:37},
-        {name:"ToFi Sport 2",stream_url:"https://cdn.gamhed.online/hls/bein2.m3u8",logo_url:"https://kurdsport.online/tofisports.png",category:"Tofi Sports",is_active:true,sort_order:38},
-        {name:"Al Iraqya Sport",stream_url:"http://m3u.drm-26.com:80/live/Mkdtv1_061261/4STJysUc/14284.m3u8",logo_url:"https://kurdsport.online/aliraq.png",category:"Global Sports",is_active:true,sort_order:39},
-        {name:"GEM Sport",stream_url:"https://northtelecom.b-cdn.net/GEMSPORTHD/1_1001_Video.m3u8",logo_url:"https://kurdsport.online/gemsport.png",category:"Global Sports",is_active:true,sort_order:40},
-        {name:"Arda Spor",stream_url:"https://ladyboy.yedektv.cfd//hls/bein1.m3u8",logo_url:"https://kurdsport.online/ardaspor.png",category:"Global Sports",is_active:true,sort_order:41},
-        {name:"TNT Sport",stream_url:"http://195.178.110.110/tntsports/index.m3u8",logo_url:"https://kurdsport.online/tntsport.png",category:"Global Sports",is_active:true,sort_order:42}].forEach(rec => {
-        const ref = db.ref('channels').push();
-        batch[ref.key] = { ...rec, id: ref.key };
-      });
-      db.ref('channels').set(batch);
-    });
+
   }
 
   /* ========== Owner panel UI ========== */
@@ -4425,6 +4633,17 @@ document.addEventListener('DOMContentLoaded', function(){
   .ks-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   @media(max-width:640px){.ks-row{grid-template-columns:1fr}}
   .ks-chan{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--border,rgba(139,92,246,.16));border-radius:14px;margin-bottom:8px;background:var(--card,rgba(255,255,255,.045))}
+  .ks-chan{flex-wrap:wrap;row-gap:8px}
+  .ks-chan .ks-meta{flex:1 1 140px;min-width:0}
+  .ks-chan .ks-btn{flex-shrink:0}
+  .ks-owner-body{overflow-x:hidden}
+  @media(max-width:520px){
+    .ks-owner-body{padding:12px}
+    .ks-chan .ks-meta{flex:1 1 100%}
+    .ks-chan .ks-meta b{white-space:normal}
+    .ks-owner-head{padding:14px}
+    .ks-owner-head h2{font-size:.85rem}
+  }
   .ks-chan img{width:56px;height:32px;object-fit:contain;border-radius:8px;background:rgba(0,0,0,.3);flex-shrink:0}
   .ks-chan .ks-meta{flex:1;min-width:0}
   .ks-chan .ks-meta b{font-size:.84rem;color:var(--text,#fff);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -4515,24 +4734,49 @@ document.addEventListener('DOMContentLoaded', function(){
         </label>
         <div class="ks-msg" id="ksFormMsg"></div>
         <div style="display:flex;gap:10px">
-          <button class="ks-btn" id="ksSave"><i class="fas fa-save"></i> Save Changes</button>
+          <button class="ks-btn" id="ksSave">${isNew ? '<i class="fas fa-plus"></i> Add Channel' : '<i class="fas fa-save"></i> Save Changes'}</button>
           <button class="ks-btn ghost" id="ksCancel">Cancel</button>
         </div>
       </div>`;
   }
 
+  async function ksDeleteChannel(ch) {
+    const k = ksKey(ch.name);
+    if (ch.source === 'html') {
+      await db.ref('channels/' + ch.id).update({ is_active: false });
+    } else {
+      await db.ref('channels/' + ch.id).remove();
+    }
+    await db.ref('deleted_channels/' + ksSafe(k)).set(Date.now());
+  }
+
+  async function ksMoveChannel(id, dir) {
+    const sorted = remoteChannels.slice().sort(function(a,b){ return (a.sort_order - b.sort_order) || String(a.name).localeCompare(b.name); });
+    const idx = sorted.findIndex(function(c){ return c.id == id; });
+    const swap = idx + dir;
+    if (idx < 0 || swap < 0 || swap >= sorted.length) return;
+    const a = sorted[idx], b = sorted[swap];
+    await db.ref('channels/' + a.id).update({ sort_order: b.sort_order });
+    await db.ref('channels/' + b.id).update({ sort_order: a.sort_order });
+  }
+
   function listView() {
     db.ref('commands').remove().catch(() => {});
-    const rows = remoteChannels.map(c => `
+    const rows = remoteChannels.slice().sort((a,b) => (a.sort_order - b.sort_order) || String(a.name).localeCompare(b.name)).map(c => `
       <div class="ks-chan">
         ${c.logo_url ? `<img src="${esc(c.logo_url)}" onerror="this.style.visibility='hidden'">` : '<div style="width:56px"></div>'}
         <div class="ks-meta"><b>${esc(c.name)}</b><span>${esc(c.category)} · ${esc(c.stream_url).slice(0, 60)}</span></div>
         <span class="ks-badge ${c.is_active ? 'on' : 'off'}">${c.is_active ? 'LIVE' : 'OFF'}</span>
+        <button class="ks-btn sm ghost" data-test="${c.id}" title="Open stream to test"><i class="fas fa-play"></i></button>
         <button class="ks-btn sm ghost" data-edit="${c.id}" title="Edit channel"><i class="fas fa-pen"></i></button>
+        <button class="ks-btn sm ghost" data-del="${c.id}" title="Delete channel"><i class="fas fa-trash" style="color:#ef4444"></i></button>
       </div>`).join('');
 
     body.innerHTML = `
       <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+        <button class="ks-btn" id="ksAdd"><i class="fas fa-plus"></i> Add Channel</button>
+        <button class="ks-btn ghost" id="ksAnnounce" title="Show a message on every visitor's screen"><i class="fas fa-bullhorn"></i> Announce</button>
+        <button class="ks-btn ghost" id="ksAllLive" title="Switch every channel ON"><i class="fas fa-toggle-on"></i> All LIVE</button>
         <button class="ks-btn ghost" id="ksRefresh" title="Force-reload the website on every visitor's device"><i class="fas fa-tower-broadcast"></i> Refresh All Visitors</button>
         <button class="ks-btn ghost" id="ksLogout" style="margin-inline-start:auto"><i class="fas fa-right-from-bracket"></i> Log out</button>
       </div>
@@ -4540,6 +4784,36 @@ document.addEventListener('DOMContentLoaded', function(){
       <div id="ksFormSlot"></div>
       <div>${rows || '<p style="color:var(--text-3,#7d7a92);font-size:.82rem">No channels found.</p>'}</div>`;
 
+    body.querySelector('#ksAdd').onclick = () => {
+      body.querySelector('#ksFormSlot').innerHTML = editForm(null);
+      wireForm(null);
+    };
+    body.querySelector('#ksAllLive').onclick = async () => {
+      if (!confirm('Switch ALL channels to LIVE?')) return;
+      const msgEl = body.querySelector('#ksListMsg');
+      try {
+        const tasks = [];
+        remoteChannels.forEach(function(c){
+          if (c.is_active === false) tasks.push(db.ref('channels/' + c.id).update({ is_active: true }));
+          tasks.push(db.ref('deleted_channels/' + c.id).remove());
+        });
+        await Promise.all(tasks);
+        msgEl.textContent = 'All channels switched ON.'; msgEl.className = 'ks-msg ok';
+      } catch (err) {
+        msgEl.textContent = 'Failed: ' + err.message; msgEl.className = 'ks-msg err';
+      }
+    };
+    body.querySelector('#ksAnnounce').onclick = async () => {
+      const msg = prompt('Message to show ALL visitors (they see it as a popup):');
+      if (!msg || !msg.trim()) return;
+      const msgEl = body.querySelector('#ksListMsg');
+      try {
+        await db.ref('commands').push({ cmd: 'announce', msg: msg.trim(), ts: Date.now() });
+        msgEl.textContent = 'Announcement sent to all visitors.'; msgEl.className = 'ks-msg ok';
+      } catch (err) {
+        msgEl.textContent = 'Failed: ' + err.message; msgEl.className = 'ks-msg err';
+      }
+    };
     body.querySelector('#ksRefresh').onclick = async () => {
       const msgEl = body.querySelector('#ksListMsg');
       try {
@@ -4555,6 +4829,36 @@ document.addEventListener('DOMContentLoaded', function(){
       const ch = remoteChannels.find(c => c.id == btn.dataset.edit);
       body.querySelector('#ksFormSlot').innerHTML = editForm(ch);
       wireForm(ch);
+    });
+    body.querySelectorAll('[data-del]').forEach(btn => btn.onclick = async () => {
+      const ch = remoteChannels.find(c => c.id == btn.dataset.del);
+      if (!ch) return;
+      if (!confirm('Delete "' + ch.name + '"? It will disappear from the whole website.')) return;
+      const msgEl = body.querySelector('#ksListMsg');
+      const btnEl = btn;
+      btnEl.disabled = true;
+      try {
+        await ksDeleteChannel(ch);
+        // instant local update — row disappears immediately without waiting for Firebase
+        if (ch.source === 'html') {
+          const i = remoteChannels.findIndex(c => c.id == ch.id);
+          if (i > -1) remoteChannels[i].is_active = false;
+        } else {
+          remoteChannels = remoteChannels.filter(c => c.id != ch.id);
+        }
+        msgEl.textContent = ch.source === 'html'
+          ? '"' + ch.name + '" switched OFF (built-in channel — use Edit to turn back ON).'
+          : '"' + ch.name + '" deleted — gone from the whole site.';
+        msgEl.className = 'ks-msg ok';
+        listView();
+      } catch (err) {
+        msgEl.textContent = 'Delete failed: ' + err.message + ' — check Firebase rules allow writes.'; msgEl.className = 'ks-msg err';
+        btnEl.disabled = false;
+      }
+    });
+    body.querySelectorAll('[data-test]').forEach(btn => btn.onclick = () => {
+      const ch = remoteChannels.find(c => c.id == btn.dataset.test);
+      if (ch && ch.stream_url) window.open(ch.stream_url, '_blank');
     });
   }
 
@@ -4576,9 +4880,22 @@ document.addEventListener('DOMContentLoaded', function(){
       const btn = body.querySelector('#ksSave');
       btn.disabled = true;
       try {
-        if (!ch) throw new Error('Editing only — adding is disabled');
-        await db.ref('channels/' + ch.id).update(rec);
-        msgEl.textContent = 'Saved — pushing live to all visitors…'; msgEl.className = 'ks-msg ok';
+        if (!ch) {
+          if (KS_HTML_CHANNELS.some(c => ksKey(c.name) === ksKey(rec.name)))
+            throw new Error('"' + rec.name + '" is built into the website file — edit the HTML file or switch it OFF instead.');
+          if (remoteChannels.some(c => ksKey(c.name) === ksKey(rec.name)))
+            throw new Error('A channel with this name already exists.');
+          const maxSort = remoteChannels.reduce((m, c) => Math.max(m, c.sort_order || 0), 0);
+          const ref = db.ref('channels').push();
+          rec.id = ref.key;
+          rec.source = 'panel';
+          rec.sort_order = maxSort + 1;
+          await ref.set(rec);
+        } else {
+          await db.ref('channels/' + ch.id).update(rec);
+        }
+        if (rec.is_active) await db.ref('deleted_channels/' + ksSafe(ksKey(rec.name))).remove();
+        msgEl.textContent = 'Saved — live for all visitors.'; msgEl.className = 'ks-msg ok';
         body.querySelector('#ksFormSlot').innerHTML = '';
       } catch (err) {
         msgEl.textContent = 'Save failed: ' + err.message; msgEl.className = 'ks-msg err';
@@ -4602,61 +4919,33 @@ document.addEventListener('DOMContentLoaded', function(){
 </script>
 
 
-<!-- ===== KIMI FIX: HTML file controls ALL channels (add here = show, delete here = gone everywhere) ===== -->
+
 <script>
-(function () {
-    var HTML_CHANNELS = null;   // snapshot of channels defined in this HTML file
-
-    function keyOf(c) { return c.url || c.name || ''; }
-
-    function takeSnapshot() {
-        if (HTML_CHANNELS === null && typeof channels !== 'undefined' && channels.length) {
-            HTML_CHANNELS = channels.slice();          // remember exactly what the HTML defines
-        }
-    }
-
-    function enforce() {
-        takeSnapshot();
-        if (HTML_CHANNELS === null || typeof channels === 'undefined') return;
-
-        var allowed = {};
-        HTML_CHANNELS.forEach(function (c) {
-            allowed[keyOf(c)] = true;
-            if (c.name) allowed[c.name] = true;
-        });
-
-        // 1) Remove anything in the live list that is NOT in the HTML file
-        //    (kills Firebase-synced copies & old saved channels you deleted from the code)
-        var removed = 0;
-        for (var i = channels.length - 1; i >= 0; i--) {
-            if (!allowed[keyOf(channels[i])]) {
-                channels.splice(i, 1);
-                removed++;
-            }
-        }
-
-        // 2) Purge deleted channels from browser saved-data (custom channels)
-        try {
-            var saved = JSON.parse(localStorage.getItem('yara_custom_channels') || '[]');
-            var kept = saved.filter(function (c) { return allowed[keyOf(c)] || (c.name && allowed[c.name]); });
-            if (kept.length !== saved.length) {
-                localStorage.setItem('yara_custom_channels', JSON.stringify(kept));
-            }
-        } catch (e) {}
-
-        // 3) Re-render so the page always matches the HTML file
-        try { if (typeof renderChannels === 'function') renderChannels(); } catch (e) {}
-        try { if (typeof renderHomeGrid === 'function') renderHomeGrid(); } catch (e) {}
-    }
-
-    // Enforce immediately, then keep watching for ~5 minutes
-    // (covers slow wifi where Firebase sync arrives late)
-    enforce();
-    var n = 0;
-    var t = setInterval(function () {
-        enforce();
-        if (++n > 60) clearInterval(t);
-    }, 5000);
+/* === GRID SAFETY NET (self-healing) === */
+(function(){
+  function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');}
+  function fixGrid(){
+    try{
+      if (typeof channels==='undefined' || !channels.length) return;
+      var grid=document.getElementById('channelGrid');
+      if(!grid) return;
+      var cat=(typeof window.__ksHomeCat!=='undefined' && window.__ksHomeCat) ? window.__ksHomeCat : 'All';
+      var favs=[];
+      try{ favs=JSON.parse(localStorage.getItem('yara_favorites')||'[]'); }catch(e){}
+      var list=channels.filter(function(ch){ return cat==='All' || (ch.category||'Sports')===cat; });
+      list.sort(function(a,b){ return (favs.indexOf(b.name)>-1?1:0)-(favs.indexOf(a.name)>-1?1:0); });
+      grid.innerHTML=list.map(function(ch){
+        var realIdx=channels.indexOf(ch); if(realIdx<0) realIdx=0;
+        var icon=ch.logo
+          ? '<img src="'+esc(ch.logo)+'" loading="lazy" onerror="this.style.display=\'none\'">'
+          : '<span class="grid-emoji">📺</span>';
+        var star='<button class="fav-btn'+(favs.indexOf(ch.name)>-1?' active':'')+'" onclick="event.stopPropagation();toggleFav('+JSON.stringify(ch.name).replace(/"/g,'&quot;')+')" title="Favorite"><i class="fas fa-star"></i></button>';
+        return '<div class="grid-card" onclick="loadChannel('+realIdx+')">'+star+'<div class="grid-icon">'+icon+'</div><div class="grid-name">'+esc(ch.name)+'</div></div>';
+      }).join('');
+    }catch(e){}
+  }
+  window.addEventListener('ks:channels', fixGrid);
+  setTimeout(fixGrid, 1500);
 })();
 </script>
 </body>
