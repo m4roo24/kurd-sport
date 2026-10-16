@@ -2540,39 +2540,34 @@ body{background-attachment:fixed;background-repeat:no-repeat;background-image:ra
         showToast(seconds === 0 ? 'Controls: Always visible' : 'Controls hide: ' + seconds + 's', 'fas fa-check');
     }
 
-    /* ---- Owner Panel: live visitor stats (counterapi.dev, no backend needed) ---- */
+    /* ---- Owner Panel: live visitor stats (real "online now" presence) ---- */
 const OWNER_CODE = 'kurdsport2026'; // <-- CHANGE THIS to your own secret code
-const STAT_NS = 'kurdsport-online-v1';
 
-function statBucketName(){ // 10-minute bucket = "currently online" window
-    const d = new Date();
-    return 'online_' + d.getFullYear() + '_' + (d.getMonth()+1) + '_' + d.getDate() + '_' + (d.getHours()*6 + Math.floor(d.getMinutes()/10));
-}
-function statTodayName(){
-    const d = new Date();
-    return 'today_' + d.getFullYear() + '_' + (d.getMonth()+1) + '_' + d.getDate();
-}
-async function statUp(name){
-    try { const r = await fetch('https://api.counterapi.dev/v1/' + STAT_NS + '/' + name + '/up'); const j = await r.json(); return (typeof j.count === 'number') ? j.count : null; }
+let ksVid = localStorage.getItem('ks_vid');
+if (!ksVid){ ksVid = 'v' + Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('ks_vid', ksVid); }
+
+async function ksFetch(path){ // helper: returns json or null. Read requests NEVER add counts.
+    try { const r = await fetch(path, { cache: 'no-store' }); if (!r.ok) return null; return await r.json(); }
     catch(e){ return null; }
 }
-async function statGet(name){
-    try { const r = await fetch('https://api.counterapi.dev/v1/' + STAT_NS + '/' + name); const j = await r.json(); return (typeof j.count === 'number') ? j.count : null; }
-    catch(e){ return null; }
+async function statBackup(key){ // backup counter (only if stats.php missing)
+    const j = await ksFetch('https://api.counterapi.dev/v1/kurdsport-online-v1/' + encodeURIComponent(key));
+    return (j && typeof j.count === 'number') ? j.count : null;
 }
 
-// Every visitor silently pings (invisible, ~1 tiny request per 5 min per user)
-function visitorPing(){
-    statUp(statBucketName());
+// Heartbeat: "I'm still here" every 60s. Stops automatically when the tab is closed.
+async function visitorHeartbeat(){
+    const j = await ksFetch('./stats.php?hb=' + ksVid);
+    if (j && typeof j.online === 'number') window._ksOnline = j.online;
     const today = new Date().toDateString();
     if (localStorage.getItem('ks_stat_day') !== today){
         localStorage.setItem('ks_stat_day', today);
-        statUp(statTodayName());
-        statUp('total');
+        ksFetch('./stats.php?event=today');
+        ksFetch('./stats.php?event=total');
     }
 }
-visitorPing();
-setInterval(visitorPing, 5 * 60 * 1000);
+visitorHeartbeat();
+setInterval(visitorHeartbeat, 60 * 1000);
 
 function unlockOwnerPanel(){
     const input = document.getElementById('ownerCodeInput');
@@ -2597,9 +2592,19 @@ function showOwnerStats(){
 }
 async function refreshOwnerStats(){
     const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = (v === null || v === undefined) ? '—' : v.toLocaleString(); };
-    set('statOnline', await statGet(statBucketName()));
-    set('statToday', await statGet(statTodayName()));
-    set('statTotal', await statGet('total'));
+    const j = await ksFetch('./stats.php?stats=1');
+    if (j && typeof j.online === 'number'){
+        set('statOnline', j.online);
+        set('statToday', j.today);
+        set('statTotal', j.total);
+    } else {
+        // Hosting has no PHP -> approximate backup (never inflates: reads only)
+        const d = new Date();
+        const bucket = 'online_' + d.getFullYear() + '_' + (d.getMonth()+1) + '_' + d.getDate() + '_' + (d.getHours()*6 + Math.floor(d.getMinutes()/10));
+        set('statOnline', await statBackup(bucket));
+        set('statToday', await statBackup('today_' + d.getFullYear() + '_' + (d.getMonth()+1) + '_' + d.getDate()));
+        set('statTotal', await statBackup('total'));
+    }
     const u = document.getElementById('statUpdated');
     if (u) u.textContent = 'Last updated ' + new Date().toLocaleTimeString() + ' — auto-refreshes every 30s.';
 }
