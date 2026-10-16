@@ -434,6 +434,15 @@ body{background-attachment:fixed;background-repeat:no-repeat;background-image:ra
 .pip-btn{position:absolute;bottom:12px;inset-inline-start:12px;z-index:20;width:40px;height:40px;border-radius:12px;border:1px solid var(--border);background:rgba(8,6,15,.65);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:#fff;cursor:pointer;font-size:.95rem;display:flex;align-items:center;justify-content:center;transition:all .2s;padding:0}
 .pip-btn:hover{background:var(--accent);border-color:var(--accent)}
 .pip-btn.active{background:var(--accent);border-color:var(--accent);box-shadow:0 0 14px rgba(139,92,246,.6)}
+/* ---- Owner Panel (visitor stats) ---- */
+.owner-stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.owner-stat{display:flex;flex-direction:column;align-items:center;gap:4px;padding:12px 6px;background:var(--input);border:1px solid var(--border);border-radius:12px}
+.owner-stat i{color:var(--accent);font-size:1rem}
+.owner-stat-num{font-size:1.15rem;font-weight:800;color:var(--text)}
+.owner-stat-label{font-size:.62rem;color:var(--text-3);font-weight:700;text-transform:uppercase;letter-spacing:.5px;text-align:center}
+.owner-lock-row{display:flex;gap:8px}
+.owner-lock-row .settings-input{flex:1}
+@media(max-width:768px){.owner-stats-grid{grid-template-columns:repeat(3,1fr);gap:6px}.owner-stat-num{font-size:1rem}}
 /* ---- Favorites & Hide ---- */
 .fav-btn{position:absolute;top:12px;inset-inline-start:12px;width:32px;height:32px;border-radius:50%;border:1px solid var(--border);background:var(--card);color:var(--text-3);cursor:pointer;font-size:.85rem;display:flex;align-items:center;justify-content:center;z-index:6;transition:all .2s;padding:0}
 .fav-btn:hover{border-color:rgba(245,158,11,.5);color:#f59e0b}
@@ -921,6 +930,27 @@ body{background-attachment:fixed;background-repeat:no-repeat;background-image:ra
                 </div>
             </div>
                         
+<div class="settings-section" id="ownerPanelSection">
+                <h3><i class="fas fa-user-shield"></i> Owner Panel</h3>
+                <div id="ownerLocked">
+                    <p class="settings-desc">Live visitor stats — visible only to you. Enter your owner code. Visitors never see this panel.</p>
+                    <div class="owner-lock-row">
+                        <input type="password" id="ownerCodeInput" class="settings-input" placeholder="Owner code" autocomplete="off" onkeydown="if(event.key==='Enter')unlockOwnerPanel()">
+                        <button class="settings-btn-primary" style="flex-shrink:0;" onclick="unlockOwnerPanel()" tabindex="0"><i class="fas fa-lock-open"></i> Unlock</button>
+                    </div>
+                    <div id="ownerError" style="color:var(--live-red); font-size:.78rem; margin-top:10px; display:none; font-weight:600;"><i class="fas fa-exclamation-circle"></i> Wrong code — try again</div>
+                </div>
+                <div id="ownerStats" style="display:none;">
+                    <div class="owner-stats-grid">
+                        <div class="owner-stat"><i class="fas fa-users"></i><span class="owner-stat-num" id="statOnline">—</span><span class="owner-stat-label">Online now</span></div>
+                        <div class="owner-stat"><i class="fas fa-calendar-day"></i><span class="owner-stat-num" id="statToday">—</span><span class="owner-stat-label">Today</span></div>
+                        <div class="owner-stat"><i class="fas fa-globe"></i><span class="owner-stat-num" id="statTotal">—</span><span class="owner-stat-label">Total visits</span></div>
+                    </div>
+                    <p class="settings-desc" id="statUpdated" style="margin-top:10px; margin-bottom:10px;">Loading stats…</p>
+                    <button class="settings-btn-primary" style="background:rgba(239,68,68,.14); color:var(--live-red);" onclick="lockOwnerPanel()" tabindex="0"><i class="fas fa-lock"></i> Lock Panel</button>
+                </div>
+            </div>
+
             <div class="settings-section">
                 <h3><i class="fas fa-external-link-alt"></i> Links</h3>
                 <div class="social-links">
@@ -2510,7 +2540,73 @@ body{background-attachment:fixed;background-repeat:no-repeat;background-image:ra
         showToast(seconds === 0 ? 'Controls: Always visible' : 'Controls hide: ' + seconds + 's', 'fas fa-check');
     }
 
-    /* ---- Picture-in-Picture ---- */
+    /* ---- Owner Panel: live visitor stats (counterapi.dev, no backend needed) ---- */
+const OWNER_CODE = 'kurdsport2026'; // <-- CHANGE THIS to your own secret code
+const STAT_NS = 'kurdsport-online-v1';
+
+function statBucketName(){ // 10-minute bucket = "currently online" window
+    const d = new Date();
+    return 'online_' + d.getFullYear() + '_' + (d.getMonth()+1) + '_' + d.getDate() + '_' + (d.getHours()*6 + Math.floor(d.getMinutes()/10));
+}
+function statTodayName(){
+    const d = new Date();
+    return 'today_' + d.getFullYear() + '_' + (d.getMonth()+1) + '_' + d.getDate();
+}
+async function statUp(name){
+    try { const r = await fetch('https://api.counterapi.dev/v1/' + STAT_NS + '/' + name + '/up'); const j = await r.json(); return (typeof j.count === 'number') ? j.count : null; }
+    catch(e){ return null; }
+}
+async function statGet(name){
+    try { const r = await fetch('https://api.counterapi.dev/v1/' + STAT_NS + '/' + name); const j = await r.json(); return (typeof j.count === 'number') ? j.count : null; }
+    catch(e){ return null; }
+}
+
+// Every visitor silently pings (invisible, ~1 tiny request per 5 min per user)
+function visitorPing(){
+    statUp(statBucketName());
+    const today = new Date().toDateString();
+    if (localStorage.getItem('ks_stat_day') !== today){
+        localStorage.setItem('ks_stat_day', today);
+        statUp(statTodayName());
+        statUp('total');
+    }
+}
+visitorPing();
+setInterval(visitorPing, 5 * 60 * 1000);
+
+function unlockOwnerPanel(){
+    const input = document.getElementById('ownerCodeInput');
+    const err = document.getElementById('ownerError');
+    if (input && input.value.trim() === OWNER_CODE){
+        localStorage.setItem('ks_owner', '1');
+        if (err) err.style.display = 'none';
+        showOwnerStats();
+        if (typeof showToast !== 'undefined') showToast('Owner panel unlocked', 'fas fa-user-shield');
+    } else if (err) { err.style.display = 'block'; }
+}
+function lockOwnerPanel(){
+    localStorage.removeItem('ks_owner');
+    const l = document.getElementById('ownerLocked'); const s = document.getElementById('ownerStats');
+    if (l) l.style.display = 'block'; if (s) s.style.display = 'none';
+    if (typeof showToast !== 'undefined') showToast('Owner panel locked', 'fas fa-lock');
+}
+function showOwnerStats(){
+    const l = document.getElementById('ownerLocked'); const s = document.getElementById('ownerStats');
+    if (l) l.style.display = 'none'; if (s) s.style.display = 'block';
+    refreshOwnerStats();
+}
+async function refreshOwnerStats(){
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = (v === null || v === undefined) ? '—' : v.toLocaleString(); };
+    set('statOnline', await statGet(statBucketName()));
+    set('statToday', await statGet(statTodayName()));
+    set('statTotal', await statGet('total'));
+    const u = document.getElementById('statUpdated');
+    if (u) u.textContent = 'Last updated ' + new Date().toLocaleTimeString() + ' — auto-refreshes every 30s.';
+}
+if (localStorage.getItem('ks_owner') === '1'){ showOwnerStats(); }
+setInterval(() => { if (localStorage.getItem('ks_owner') === '1') refreshOwnerStats(); }, 30000);
+
+/* ---- Picture-in-Picture ---- */
 async function togglePip(e){
     if (e) e.stopPropagation();
     const video = document.getElementById('videoPlayer');
