@@ -9,6 +9,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans+Arabic:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
     <script src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1"></script>
     <style>
 /* ============ KURD SPORT - AURORA UI v2 - Purple-only, variable-driven, iPhone-ready ============ */
@@ -2540,34 +2542,52 @@ body{background-attachment:fixed;background-repeat:no-repeat;background-image:ra
         showToast(seconds === 0 ? 'Controls: Always visible' : 'Controls hide: ' + seconds + 's', 'fas fa-check');
     }
 
-    /* ---- Owner Panel: live visitor stats (real "online now" presence) ---- */
+    /* ---- Owner Panel: live visitor stats via Firebase Realtime Database ---- */
 const OWNER_CODE = 'kurdsport2026'; // <-- CHANGE THIS to your own secret code
 
+const firebaseConfig = {
+    apiKey: "AIzaSyDzY1yU7zUvaI_DQ8Wd954iXDAxr2yAvHo",
+    authDomain: "kurdsportonline-36377.firebaseapp.com",
+    databaseURL: "https://kurdsportonline-36377-default-rtdb.firebaseio.com",
+    projectId: "kurdsportonline-36377",
+    storageBucket: "kurdsportonline-36377.firebasestorage.app",
+    messagingSenderId: "477167578521",
+    appId: "1:477167578521:web:da4fd4ce4f496d5906b708"
+};
+
+let ksDb = null, ksServerOffset = 0;
+try {
+    if (typeof firebase !== 'undefined' && !firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    if (typeof firebase !== 'undefined') {
+        ksDb = firebase.database();
+        ksDb.ref('.info/serverTimeOffset').on('value', (s) => { ksServerOffset = s.val() || 0; });
+    }
+} catch(e){ console.error('Firebase init failed:', e); }
+
+// One persistent ID per device = one person counted once
 let ksVid = localStorage.getItem('ks_vid');
 if (!ksVid){ ksVid = 'v' + Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('ks_vid', ksVid); }
 
-async function ksFetch(path){ // helper: returns json or null. Read requests NEVER add counts.
-    try { const r = await fetch(path, { cache: 'no-store' }); if (!r.ok) return null; return await r.json(); }
-    catch(e){ return null; }
-}
-async function statBackup(key){ // backup counter (only if stats.php missing)
-    const j = await ksFetch('https://api.counterapi.dev/v1/kurdsport-online-v1/' + encodeURIComponent(key));
-    return (j && typeof j.count === 'number') ? j.count : null;
-}
+function ksServerNow(){ return Date.now() + ksServerOffset; }
 
-// Heartbeat: "I'm still here" every 60s. Stops automatically when the tab is closed.
-async function visitorHeartbeat(){
-    const j = await ksFetch('./stats.php?hb=' + ksVid);
-    if (j && typeof j.online === 'number') window._ksOnline = j.online;
+// Heartbeat: "I'm here" every 60s + auto-remove the moment the visitor disconnects
+function visitorHeartbeat(){
+    if (!ksDb) return;
+    const me = ksDb.ref('status/' + ksVid);
+    me.set({ t: ksServerNow() });
+    me.onDisconnect().remove();
     const today = new Date().toDateString();
     if (localStorage.getItem('ks_stat_day') !== today){
         localStorage.setItem('ks_stat_day', today);
-        ksFetch('./stats.php?event=today');
-        ksFetch('./stats.php?event=total');
+        const d = new Date();
+        ksDb.ref('counts/total').transaction((c) => (c || 0) + 1);
+        ksDb.ref('counts/today_' + d.getFullYear() + '_' + (d.getMonth()+1) + '_' + d.getDate()).transaction((c) => (c || 0) + 1);
     }
 }
-visitorHeartbeat();
-setInterval(visitorHeartbeat, 60 * 1000);
+if (ksDb){
+    ksDb.ref('.info/connected').on('value', (snap) => { if (snap.val() === true) visitorHeartbeat(); });
+    setInterval(visitorHeartbeat, 60 * 1000);
+}
 
 function unlockOwnerPanel(){
     const input = document.getElementById('ownerCodeInput');
@@ -2590,23 +2610,35 @@ function showOwnerStats(){
     if (l) l.style.display = 'none'; if (s) s.style.display = 'block';
     refreshOwnerStats();
 }
+let ksStatsWired = false;
 async function refreshOwnerStats(){
-    const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = (v === null || v === undefined) ? '—' : v.toLocaleString(); };
-    const j = await ksFetch('./stats.php?stats=1');
-    if (j && typeof j.online === 'number'){
-        set('statOnline', j.online);
-        set('statToday', j.today);
-        set('statTotal', j.total);
-    } else {
-        // Hosting has no PHP -> approximate backup (never inflates: reads only)
-        const d = new Date();
-        const bucket = 'online_' + d.getFullYear() + '_' + (d.getMonth()+1) + '_' + d.getDate() + '_' + (d.getHours()*6 + Math.floor(d.getMinutes()/10));
-        set('statOnline', await statBackup(bucket));
-        set('statToday', await statBackup('today_' + d.getFullYear() + '_' + (d.getMonth()+1) + '_' + d.getDate()));
-        set('statTotal', await statBackup('total'));
-    }
     const u = document.getElementById('statUpdated');
-    if (u) u.textContent = 'Last updated ' + new Date().toLocaleTimeString() + ' — auto-refreshes every 30s.';
+    if (!ksDb){
+        ['statOnline','statToday','statTotal'].forEach(id => { const el = document.getElementById(id); if (el) el.textContent = '—'; });
+        if (u) u.textContent = 'Stats unavailable — check Firebase database rules (step 2 below).';
+        return;
+    }
+    if (!ksStatsWired){
+        ksStatsWired = true;
+        // ONLINE NOW: count heartbeat nodes younger than 3 minutes
+        ksDb.ref('status').on('value', (snap) => {
+            const now = ksServerNow();
+            let n = 0;
+            snap.forEach((child) => { const v = child.val(); if (v && v.t && now - v.t <= 180000) n++; });
+            const el = document.getElementById('statOnline');
+            if (el) el.textContent = n.toLocaleString();
+        });
+        const d = new Date();
+        ksDb.ref('counts/today_' + d.getFullYear() + '_' + (d.getMonth()+1) + '_' + d.getDate()).on('value', (snap) => {
+            const el = document.getElementById('statToday');
+            if (el) el.textContent = (snap.val() || 0).toLocaleString();
+        });
+        ksDb.ref('counts/total').on('value', (snap) => {
+            const el = document.getElementById('statTotal');
+            if (el) el.textContent = (snap.val() || 0).toLocaleString();
+        });
+    }
+    if (u) u.textContent = 'Live — updates in real time, no refresh needed.';
 }
 if (localStorage.getItem('ks_owner') === '1'){ showOwnerStats(); }
 setInterval(() => { if (localStorage.getItem('ks_owner') === '1') refreshOwnerStats(); }, 30000);
