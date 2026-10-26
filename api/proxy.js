@@ -47,7 +47,7 @@ function rewritePlaylist(text, baseUrl, req, hosts) {
   }).join("\n");
 }
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   Object.entries(cors).forEach(([k, v]) => res.setHeader(k, v));
   if (req.method === "OPTIONS") return res.status(204).end();
   if (!["GET", "HEAD"].includes(req.method)) {
